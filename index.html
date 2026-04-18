@@ -6,14 +6,13 @@
 <title>Windmill Cafe & Roastery — Live Stock Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <!-- Firebase Realtime Database — free, no server needed -->
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
 
 <style>
 /* ═══════════════════════════════════════════════
    SETUP SCREEN (shown before Firebase configured)
 ═══════════════════════════════════════════════ */
-#setup-screen{position:fixed;inset:0;background:#0c0906;z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Barlow Condensed',sans-serif;}
+#setup-screen{position:fixed;inset:0;background:#0c0906;z-index:9000;display:none;align-items:center;justify-content:center;padding:20px;font-family:'Barlow Condensed',sans-serif;}
 .setup-box{background:#1a1208;border:1px solid #3f2e1a;border-radius:16px;padding:36px 32px;width:100%;max-width:600px;color:#c0a880;}
 .setup-logo{font-size:36px;margin-bottom:4px;display:block;text-align:center;}
 .setup-title{font-family:'Playfair Display',serif;font-size:22px;color:#f5cc82;text-align:center;margin-bottom:4px;}
@@ -352,17 +351,28 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 </div>
 
 <!-- ═══ MAIN APP ═══ -->
-<div id="app" style="display:none"></div>
+<div id="app" style="display:block"></div>
 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
 'use strict';
 
-/* ══════════════════════════════════════════════════════
-   FIREBASE CONFIG — filled in by setup screen
-══════════════════════════════════════════════════════ */
-var FB_CONFIG = null; // set by setup
-var fbDB = null;      // firebase database instance
-var fbRef = null;     // root ref: /windmill-stock
+var fbDB = null;
+var fbRef = null;
+
+function initFirebaseAndBoot() {
+  var app = firebase.initializeApp({
+    apiKey:        'AIzaSyCqS-QV9UfCSF0pJ3Ft4d9MjmboV2J4ZBE',
+    authDomain:    'windmill-beans.firebaseapp.com',
+    databaseURL:   'https://windmill-beans-default-rtdb.firebaseio.com/',
+    projectId:     'windmill-beans',
+    storageBucket: 'windmill-beans.appspot.com'
+  });
+  fbDB  = firebase.database(app);
+  fbRef = fbDB.ref('windmill-stock');
+  bootApp();
+}
 
 /* ══════════════════════════════════════════════════════
    SETUP SCREEN LOGIC
@@ -408,21 +418,8 @@ document.getElementById('setupConnectBtn').onclick = function() {
   }
 };
 
-// Auto-fill saved config and skip setup if already configured
-(function() {
-  try {
-    var dburl     = localStorage.getItem('wc-fb-dburl');
-    var apikey    = localStorage.getItem('wc-fb-apikey');
-    var projectid = localStorage.getItem('wc-fb-projectid');
-    if(dburl && apikey && projectid) {
-      document.getElementById('cfg-dburl').value      = dburl;
-      document.getElementById('cfg-apikey').value     = apikey;
-      document.getElementById('cfg-projectid').value  = projectid;
-      // Auto-connect
-      setTimeout(function() { document.getElementById('setupConnectBtn').click(); }, 100);
-    }
-  } catch(e) {}
-})();
+// Boot on load
+window.addEventListener("DOMContentLoaded", initFirebaseAndBoot);
 
 /* ══════════════════════════════════════════════════════
    DEFAULT ITEMS
