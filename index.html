@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Windmill Cafe & Roastery — Live Stock Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<!-- Firebase Realtime Database — free, no server needed -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════
+   SETUP SCREEN (shown before Firebase configured)
+═══════════════════════════════════════════════ */
+#setup-screen{position:fixed;inset:0;background:#0c0906;z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Barlow Condensed',sans-serif;}
+.setup-box{background:#1a1208;border:1px solid #3f2e1a;border-radius:16px;padding:36px 32px;width:100%;max-width:600px;color:#c0a880;}
+.setup-logo{font-size:36px;margin-bottom:4px;display:block;text-align:center;}
+.setup-title{font-family:'Playfair Display',serif;font-size:22px;color:#f5cc82;text-align:center;margin-bottom:4px;}
+.setup-sub{font-size:11px;color:#8a7050;text-align:center;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:28px;}
+.setup-step{display:flex;gap:14px;margin-bottom:18px;align-items:flex-start;}
+.setup-num{background:#c8923c;color:#0c0906;width:24px;height:24px;border-radius:50%;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+.setup-step-text{font-size:12px;line-height:1.6;color:#c0a880;}
+.setup-step-text a{color:#e5b060;text-decoration:underline;}
+.setup-step-text strong{color:#f0e8d8;}
+.setup-inp{background:#13100a;border:1px solid #3f2e1a;border-radius:7px;color:#f0e8d8;font-size:12px;padding:8px 12px;outline:none;width:100%;font-family:'JetBrains Mono',monospace;margin-top:6px;transition:border 0.15s;}
+.setup-inp:focus{border-color:#c8923c;}
+.setup-connect-btn{width:100%;margin-top:20px;padding:13px;background:rgba(200,146,60,0.12);border:1px solid rgba(200,146,60,0.4);border-radius:8px;color:#f5cc82;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;cursor:pointer;letter-spacing:0.04em;transition:background 0.15s;}
+.setup-connect-btn:hover{background:rgba(200,146,60,0.22);}
+.setup-err{color:#e05252;font-size:10px;margin-top:8px;text-align:center;min-height:14px;}
+.setup-divider{border:none;border-top:1px solid #2d1f10;margin:22px 0;}
+.setup-note{font-size:10px;color:#8a7050;text-align:center;line-height:1.6;}
+
+:root {
+  --bg:#0c0906;--bg2:#13100a;--surf:#1a1208;--surf2:#231a0c;
+  --border:#2d1f10;--border2:#3f2e1a;
+  --gold:#c8923c;--gold2:#e5b060;--gold3:#f5cc82;
+  --cream:#f0e8d8;--cream2:#c0a880;--cream3:#8a7050;
+  --green:#4ec87a;--green-bg:rgba(78,200,122,0.1);--green-bd:rgba(78,200,122,0.28);
+  --orange:#e8873a;--orng-bg:rgba(232,135,58,0.1);--orng-bd:rgba(232,135,58,0.3);
+  --red:#e05252;--red-bg:rgba(224,82,82,0.1);--red-bd:rgba(224,82,82,0.3);
+  --blue:#60a8d8;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100vh;background:var(--bg);}
+body{font-family:'Barlow Condensed',sans-serif;color:var(--cream2);overflow-x:hidden;}
+button{cursor:pointer;font-family:inherit;border:none;background:none;}
+input,select,textarea{font-family:inherit;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px;}
+
+body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;opacity:0.018;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes spin-slow{to{transform:rotate(360deg);}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
+@keyframes fadein{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+@keyframes slidein{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:none;}}
+@keyframes popin{from{opacity:0;transform:scale(0.92) translateY(6px);}to{opacity:1;transform:none;}}
+@keyframes shake{0%,100%{transform:translateX(0);}20%,60%{transform:translateX(-9px);}40%,80%{transform:translateX(9px);}}
+@keyframes toastin{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:none;}}
+@keyframes flashbg{0%{background:rgba(200,146,60,0.15);}100%{background:transparent;}}
+@keyframes glow{0%,100%{filter:drop-shadow(0 0 4px rgba(200,146,60,0.3));}50%{filter:drop-shadow(0 0 16px rgba(200,146,60,0.7));}}
+
+#header{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:var(--bg2);border-bottom:1px solid var(--border2);flex-wrap:wrap;gap:10px;position:sticky;top:0;z-index:100;}
+.h-brand{display:flex;align-items:center;gap:12px;}
+.h-logo{width:44px;height:44px;flex-shrink:0;}
+.h-blades{transform-origin:18px 17px;animation:spin-slow 10s linear infinite;}
+.h-title{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--gold3) 0%,var(--gold) 60%,var(--gold2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1.1;}
+.h-sub{font-size:9px;color:var(--cream3);letter-spacing:0.22em;text-transform:uppercase;margin-top:2px;}
+.h-nav{display:flex;gap:5px;flex-wrap:wrap;}
+.nav-btn{padding:7px 14px;border-radius:6px;font-size:11px;font-weight:600;letter-spacing:0.07em;border:1px solid var(--border2);color:var(--cream3);transition:all 0.18s;}
+.nav-btn.active-dash{background:rgba(200,146,60,0.12);border-color:var(--gold);color:var(--gold2);}
+.nav-btn.active-team{background:rgba(78,200,122,0.1);border-color:var(--green-bd);color:var(--green);}
+.nav-btn.locked-team{background:rgba(224,82,82,0.06);border-color:var(--red-bd);color:var(--red);}
+.nav-btn.active-rpt{background:rgba(96,168,216,0.12);border-color:rgba(96,168,216,0.5);color:#7cc4f0;}
+.type-opt.sel-waste{background:rgba(232,135,58,0.15);color:var(--orange);}
+.type-opt.sel-adj{background:rgba(96,168,216,0.12);color:var(--blue);}
+
+/* REPORTS */
+.rpt-controls{display:flex;gap:10px;padding:14px 20px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--border);}
+.rpt-ctrl-group{display:flex;flex-direction:column;gap:4px;flex:1 1 130px;}
+.rpt-lbl{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;font-weight:600;}
+.rpt-sel,.rpt-date{min-width:0;}
+.btn-rpt-run{background:rgba(200,146,60,0.14);border:1px solid rgba(200,146,60,0.45);color:var(--gold3);padding:9px 20px;border-radius:7px;font-size:11px;font-weight:700;letter-spacing:0.06em;white-space:nowrap;}
+.btn-rpt-run:hover{background:rgba(200,146,60,0.24);}
+.rpt-title-bar{display:flex;justify-content:space-between;align-items:center;padding:14px 20px 4px;flex-wrap:wrap;gap:8px;}
+.rpt-product-name{font-family:'Playfair Display',serif;font-size:18px;color:var(--gold3);font-weight:700;}
+.rpt-period{font-size:10px;color:var(--cream3);letter-spacing:0.1em;margin-top:2px;}
+.rpt-summary{display:flex;gap:8px;padding:12px 20px 16px;flex-wrap:wrap;}
+.rpt-card{flex:1 1 100px;background:var(--surf);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;text-align:center;}
+.rpt-card-close{border-color:rgba(245,204,130,0.3);background:rgba(200,146,60,0.06);}
+.rpt-card-val{font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:600;line-height:1;}
+.rpt-unit{font-size:11px;color:var(--cream3);}
+.rpt-card-lbl{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:5px;}
+.rpt-table{background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden;min-width:560px;}
+.rpt-hdr{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 1fr 1fr;padding:9px 16px;background:var(--bg2);border-bottom:1px solid var(--border);}
+.rpt-hdr span{font-size:9px;color:var(--cream3);letter-spacing:0.1em;text-transform:uppercase;font-weight:600;text-align:right;}
+.rpt-hdr span:first-child{text-align:left;}
+.rpt-row{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr 1fr 1fr 1fr;padding:9px 16px;border-bottom:1px solid var(--border);align-items:center;transition:background 0.12s;}
+.rpt-row:last-child{border-bottom:none;}
+.rpt-row:hover{background:var(--surf2);}
+.rpt-date-cell{font-size:12px;color:var(--cream);font-weight:600;}
+.rpt-num{font-family:'JetBrains Mono',monospace;font-size:12px;text-align:right;}
+.rpt-close{font-weight:700;}
+.rpt-empty{margin:20px;padding:40px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;text-align:center;color:var(--cream3);font-size:12px;line-height:1.7;}
+.nav-btn.active-prov{background:rgba(224,82,82,0.1);border-color:var(--red-bd);color:var(--red);}
+.prov-wrap{margin:0 20px 20px;}
+.prov-summary{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.prov-stat{flex:1 1 120px;background:var(--surf);border:1px solid var(--border2);border-radius:10px;padding:12px 16px;text-align:center;}
+.prov-stat-num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;}
+.prov-stat-lbl{font-size:9px;color:var(--cream3);letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;}
+.prov-table{background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden;}
+.prov-hdr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.4fr 1.6fr;padding:9px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-width:520px;}
+.prov-hdr span{font-size:9px;color:var(--cream3);letter-spacing:0.12em;text-transform:uppercase;font-weight:600;text-align:right;}
+.prov-hdr span:first-child{text-align:left;}
+.prov-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.4fr 1.6fr;padding:11px 16px;border-bottom:1px solid var(--border);align-items:center;min-width:520px;transition:background 0.15s;}
+.prov-row:last-child{border-bottom:none;}
+.prov-row:hover{background:var(--surf2);}
+.prov-row span{font-size:12px;font-family:'JetBrains Mono',monospace;text-align:right;}
+.prov-name{font-family:'Barlow Condensed',sans-serif!important;text-align:left!important;color:var(--cream);font-weight:600;font-size:13px;}
+.prov-suggest{color:var(--gold2);font-weight:600;}
+.prov-note{font-size:10px;color:var(--cream3);margin-top:2px;font-family:'Barlow Condensed',sans-serif;font-style:italic;}
+.btn-copy-prov{background:rgba(200,146,60,0.1);border:1px solid rgba(200,146,60,0.3);color:var(--gold2);padding:6px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
+.prov-all-ok{padding:48px 20px;text-align:center;color:var(--green);font-size:13px;}
+.btn-clrhist{background:rgba(224,82,82,0.1);border:1px solid var(--red-bd);color:var(--red);padding:7px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
+.btn-del-entry{background:rgba(224,82,82,0.08);border:1px solid var(--red-bd);color:var(--red);padding:3px 7px;border-radius:4px;font-size:11px;flex-shrink:0;}
+.h-right{display:flex;align-items:center;gap:8px;}
+.live-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.live-txt{font-size:10px;font-weight:600;letter-spacing:0.08em;}
+.lock-btn{background:rgba(224,82,82,0.08);border:1px solid var(--red-bd);color:var(--red);padding:5px 12px;border-radius:5px;font-size:10px;font-weight:600;}
+.refresh-btn{background:transparent;border:1px solid var(--border2);color:var(--cream3);width:28px;height:28px;border-radius:5px;font-size:15px;display:flex;align-items:center;justify-content:center;}
+
+.metrics{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
+.metric{flex:1;padding:14px 10px;background:var(--bg2);text-align:center;transition:background 0.2s;}
+.metric-val{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:600;line-height:1;letter-spacing:-0.02em;}
+.metric-lbl{font-size:9px;color:var(--cream3);letter-spacing:0.15em;margin-top:5px;text-transform:uppercase;}
+.metric-sub{font-size:9px;color:var(--cream3);margin-top:2px;opacity:0.7;}
+
+/* PENDING UPDATES BANNER */
+#pending-banner{background:rgba(200,146,60,0.08);border-bottom:1px solid rgba(200,146,60,0.2);padding:7px 20px;font-size:10px;color:var(--gold2);letter-spacing:0.08em;align-items:center;gap:8px;}
+#pending-banner.visible{display:flex;}
+#pending-banner.hidden{display:none!important;}
+.pending-dot{width:6px;height:6px;border-radius:50%;background:var(--gold2);animation:pulse 1.2s infinite;flex-shrink:0;}
+
+.notice{margin:14px 20px 0;padding:10px 16px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.5;}
+.notice.view{background:rgba(200,146,60,0.05);border:1px solid rgba(200,146,60,0.2);color:#b89858;}
+.notice.edit{background:rgba(78,200,122,0.05);border:1px solid var(--green-bd);color:#5aaa70;}
+
+.filter-row{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;gap:10px;flex-wrap:wrap;}
+.chips{display:flex;gap:5px;flex-wrap:wrap;}
+.chip{padding:5px 13px;border-radius:20px;font-size:10px;font-weight:600;letter-spacing:0.08em;border:1px solid var(--border2);color:var(--cream3);transition:all 0.15s;}
+.chip.on{background:rgba(200,146,60,0.12);border-color:var(--gold);color:var(--gold2);}
+.search-input{background:var(--surf);border:1px solid var(--border2);border-radius:7px;color:var(--cream);font-size:11px;padding:7px 13px;outline:none;width:160px;transition:border 0.15s;}
+.search-input:focus{border-color:var(--gold);}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:0 20px 20px;}
+.card{background:var(--surf);border:1px solid var(--border2);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:9px;animation:popin 0.35s ease;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;min-height:165px;}
+.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.35);}
+.card.flash{animation:flashbg 1s ease;}
+.card-top{display:flex;justify-content:space-between;align-items:flex-start;}
+.card-name{font-family:'Playfair Display',serif;font-size:14px;color:var(--cream);font-weight:600;line-height:1.2;}
+.card-cat{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px;}
+.badge{font-size:8px;font-weight:700;padding:3px 8px;border-radius:4px;border:1px solid;letter-spacing:0.07em;flex-shrink:0;margin-left:6px;}
+.badge-ok{background:var(--green-bg);color:var(--green);border-color:var(--green-bd);}
+.badge-low{background:var(--orng-bg);color:var(--orange);border-color:var(--orng-bd);}
+.badge-out{background:var(--red-bg);color:var(--red);border-color:var(--red-bd);}
+.card-qty{display:flex;align-items:baseline;gap:5px;}
+.card-num{font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:600;line-height:1;letter-spacing:-0.03em;}
+.card-unit{font-size:12px;color:var(--cream3);}
+.card-moves{display:flex;justify-content:space-between;font-size:10px;font-weight:600;}
+.move-in{color:var(--green);}
+.move-out{color:var(--red);}
+.bar-wrap{height:4px;background:var(--border2);border-radius:3px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.6s ease;}
+.card-min{font-size:9px;color:var(--cream3);letter-spacing:0.06em;}
+
+.section-label{padding:14px 20px 6px;font-size:10px;color:var(--cream3);letter-spacing:0.18em;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+.hist-panel{margin:0 20px 20px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden;}
+.hist-head{padding:11px 16px;border-bottom:1px solid var(--border);font-size:10px;font-weight:600;color:var(--cream3);letter-spacing:0.14em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;}
+.hist-scroll{max-height:220px;overflow-y:auto;}
+.hist-row{display:flex;gap:12px;padding:8px 16px;border-bottom:1px solid var(--border);align-items:center;font-size:11px;animation:slidein 0.25s ease;}
+.hist-row:last-child{border-bottom:none;}
+.hist-time{color:var(--cream3);min-width:52px;font-family:'JetBrains Mono',monospace;font-size:10px;}
+.hist-name{color:var(--gold2);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600;}
+.hist-type-in{color:var(--green);font-weight:700;min-width:16px;}
+.hist-type-out{color:var(--red);font-weight:700;min-width:16px;}
+.hist-qty{font-family:'JetBrains Mono',monospace;font-size:11px;min-width:55px;}
+.hist-note{color:var(--cream3);font-size:10px;font-style:italic;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+.bal-wrap{margin:0 20px 20px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden;overflow-x:auto;}
+.bal-hdr{display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr 1.1fr;padding:9px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-width:360px;}
+.bal-hdr span{font-size:9px;color:var(--cream3);letter-spacing:0.12em;text-transform:uppercase;text-align:right;font-weight:600;}
+.bal-hdr span:first-child{text-align:left;}
+.bal-row{display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr 1.1fr;padding:10px 16px;border-bottom:1px solid var(--border);align-items:center;min-width:360px;transition:background 0.15s;}
+.bal-row:last-child{border-bottom:none;}
+.bal-row:hover{background:var(--surf2);}
+.bal-row span{font-size:12px;text-align:right;font-family:'JetBrains Mono',monospace;}
+.bal-row .bal-name{font-family:'Barlow Condensed',sans-serif;text-align:left;color:var(--cream);font-weight:600;font-size:13px;}
+.bal-in{color:var(--green);}
+.bal-out{color:var(--red);}
+.bal-num{font-weight:600;}
+
+.team-hdr{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px;}
+.team-title{font-size:11px;color:var(--gold2);letter-spacing:0.14em;text-transform:uppercase;font-weight:700;}
+.team-btns{display:flex;gap:7px;flex-wrap:wrap;}
+.btn-add{background:rgba(78,200,122,0.1);border:1px solid var(--green-bd);color:var(--green);padding:7px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
+.btn-pwd{background:rgba(200,146,60,0.08);border:1px solid rgba(200,146,60,0.35);color:var(--gold2);padding:7px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
+
+.team-table-wrap{margin:16px 20px;overflow-x:auto;}
+.team-hdr-row{display:grid;padding:8px 14px;background:var(--bg2);border-radius:8px 8px 0 0;border-bottom:1px solid var(--border);min-width:480px;}
+.team-hdr-row span{font-size:9px;color:var(--cream3);letter-spacing:0.12em;text-transform:uppercase;font-weight:600;}
+.team-item-row{display:grid;padding:10px 14px;align-items:center;border-bottom:1px solid var(--border);background:var(--surf);min-width:480px;transition:background 0.15s;}
+.team-item-row:last-child{border-bottom:none;}
+.team-item-row:hover{background:var(--surf2);}
+.team-item-row span{font-size:12px;}
+.team-item-row .ti-name{color:var(--cream);font-weight:600;font-family:'Barlow Condensed',sans-serif;font-size:13px;}
+.btn-log-in{background:rgba(78,200,122,0.1);border:1px solid var(--green-bd);color:var(--green);padding:4px 10px;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:0.06em;}
+.btn-log-out{background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);padding:4px 10px;border-radius:4px;font-size:9px;font-weight:700;letter-spacing:0.06em;}
+.btn-del{background:rgba(224,82,82,0.06);border:1px solid var(--red-bd);color:var(--red);padding:4px 8px;border-radius:4px;font-size:11px;}
+
+.form-box{margin:0 20px 16px;border-radius:10px;padding:16px;}
+.form-box.gold{background:var(--surf);border:1px solid rgba(200,146,60,0.3);}
+.form-box.green{background:var(--surf);border:1px solid var(--green-bd);}
+.form-row{display:flex;gap:8px;flex-wrap:wrap;}
+.form-field{flex:1 1 110px;}
+.form-field label{display:block;font-size:9px;color:var(--cream3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.12em;font-weight:600;}
+.inp{background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--cream);font-size:12px;padding:7px 10px;outline:none;width:100%;transition:border 0.15s;}
+.inp:focus{border-color:var(--gold);}
+.form-btns{display:flex;gap:7px;margin-top:12px;}
+.btn-save{background:rgba(78,200,122,0.12);border:1px solid var(--green-bd);color:var(--green);padding:7px 18px;border-radius:6px;font-size:11px;font-weight:700;}
+.btn-save:disabled{opacity:0.4;cursor:not-allowed;}
+.btn-cancel{background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);padding:7px 14px;border-radius:6px;font-size:11px;font-weight:700;}
+.err-txt{font-size:10px;color:var(--red);margin-top:6px;}
+/* ── COMMENT SYSTEM ── */
+.comment-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;color:var(--cream3);background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:2px 7px;cursor:pointer;transition:all 0.15s;}
+.comment-badge:hover{border-color:var(--gold);color:var(--gold2);}
+.comment-list{padding:8px 16px 8px;border-top:1px solid var(--border);background:var(--bg2);}
+.comment-item{font-size:10px;line-height:1.5;padding:5px 0;border-bottom:1px solid var(--border);color:var(--cream2);}
+.comment-item:last-child{border-bottom:none;}
+.comment-meta{font-size:9px;color:var(--cream3);}
+.comment-inp-row{display:flex;gap:6px;padding:6px 16px 10px;background:var(--bg2);border-top:1px solid var(--border);}
+.comment-inp{flex:1;background:var(--surf);border:1px solid var(--border2);border-radius:6px;color:var(--cream);font-size:11px;padding:6px 10px;outline:none;transition:border 0.15s;}
+.comment-inp:focus{border-color:var(--gold);}
+.btn-comment-send{background:rgba(200,146,60,0.12);border:1px solid rgba(200,146,60,0.4);color:var(--gold2);padding:6px 12px;border-radius:6px;font-size:10px;font-weight:700;}
+/* ── CATEGORY MANAGER ── */
+.cat-manager{margin:0 20px 16px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden;}
+.cat-manager-hdr{padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:10px;color:var(--gold2);font-weight:700;letter-spacing:0.12em;text-transform:uppercase;display:flex;justify-content:space-between;align-items:center;}
+.cat-tag{display:inline-flex;align-items:center;gap:6px;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;padding:5px 10px;font-size:11px;color:var(--cream2);}
+.cat-del{color:var(--red);font-size:13px;line-height:1;cursor:pointer;background:none;border:none;padding:0 2px;}
+.cat-tags-wrap{display:flex;gap:7px;flex-wrap:wrap;padding:12px 16px;}
+.cat-add-row{display:flex;gap:7px;padding:0 16px 12px;}
+/* ── TEAM PANEL FILTER ── */
+.team-filter-bar{display:flex;gap:8px;padding:10px 20px;flex-wrap:wrap;align-items:flex-end;border-bottom:1px solid var(--border);background:var(--bg2);}
+.team-filter-bar .fg{display:flex;flex-direction:column;gap:3px;}
+.team-filter-bar label{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.1em;}
+.team-filter-bar .inp{padding:5px 9px;font-size:11px;}
+.btn-export{background:rgba(96,168,216,0.1);border:1px solid rgba(96,168,216,0.4);color:var(--blue);padding:7px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
+/* ── EDIT BALANCE INLINE ── */
+.bal-edit-inp{width:72px;background:var(--bg2);border:1px solid var(--gold);border-radius:5px;color:var(--gold2);font-family:'JetBrains Mono',monospace;font-size:12px;padding:4px 7px;outline:none;text-align:right;}
+.btn-edit-bal{background:rgba(200,146,60,0.08);border:1px solid rgba(200,146,60,0.3);color:var(--gold2);padding:3px 8px;border-radius:4px;font-size:10px;}
+.btn-save-bal{background:rgba(78,200,122,0.1);border:1px solid var(--green-bd);color:var(--green);padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;}
+/* ── REPORT CATEGORY FILTER ── */
+.rpt-cat-chip{padding:4px 12px;border-radius:14px;font-size:10px;font-weight:600;letter-spacing:0.07em;border:1px solid var(--border2);color:var(--cream3);cursor:pointer;transition:all 0.15s;}
+.rpt-cat-chip.on{background:rgba(96,168,216,0.12);border-color:rgba(96,168,216,0.5);color:var(--blue);}
+/* ── SORT CONTROLS ── */
+.sort-btn{padding:4px 10px;border-radius:5px;font-size:10px;border:1px solid var(--border2);color:var(--cream3);background:none;transition:all 0.15s;cursor:pointer;}
+.sort-btn.on{background:rgba(200,146,60,0.1);border-color:var(--gold);color:var(--gold2);}
+
+#overlay{position:fixed;inset:0;background:rgba(8,5,2,0.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
+.modal{background:var(--surf);border:1px solid var(--border2);border-radius:16px;padding:0;width:100%;max-width:400px;animation:popin 0.28s ease;overflow:hidden;}
+.modal-hdr{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.modal-icon{font-size:24px;animation:glow 2.5s infinite;}
+.modal-title{font-family:'Playfair Display',serif;font-size:18px;color:var(--cream);font-weight:700;}
+.modal-sub{font-size:10px;color:var(--cream3);margin-top:2px;letter-spacing:0.06em;}
+.modal-body{padding:20px 24px;}
+.modal-foot{padding:14px 24px;border-top:1px solid var(--border);display:flex;gap:8px;}
+.modal-type-toggle{display:flex;gap:0;border:1px solid var(--border2);border-radius:7px;overflow:hidden;margin-bottom:16px;}
+.type-opt{flex:1;padding:8px;font-size:11px;font-weight:700;letter-spacing:0.06em;border:none;background:transparent;color:var(--cream3);transition:all 0.15s;}
+.type-opt.sel-in{background:var(--green-bg);color:var(--green);}
+.type-opt.sel-out{background:var(--red-bg);color:var(--red);}
+.modal-login-input{width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;color:var(--cream);font-size:14px;padding:11px 14px;outline:none;transition:border 0.15s;}
+.modal-login-input:focus{border-color:var(--gold);}
+.modal-login-input.err{border-color:var(--red);}
+.btn-unlock{background:rgba(200,146,60,0.12);border:1px solid rgba(200,146,60,0.4);color:var(--gold3);padding:12px;border-radius:8px;font-family:'Playfair Display',serif;font-size:15px;font-weight:700;width:100%;letter-spacing:0.04em;}
+.shake{animation:shake 0.5s ease;}
+.err-msg{font-size:10px;color:var(--red);margin-top:6px;font-weight:500;}
+
+#toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surf2);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:12px;font-weight:600;color:var(--cream);box-shadow:0 8px 32px rgba(0,0,0,0.4);animation:toastin 0.3s ease;z-index:300;white-space:nowrap;letter-spacing:0.04em;}
+#footer{text-align:center;padding:20px;font-size:9px;color:var(--border2);letter-spacing:0.12em;border-top:1px solid var(--border);margin-top:12px;text-transform:uppercase;}
+.empty{padding:40px 20px;text-align:center;color:var(--cream3);font-size:12px;}
+</style>
+</head>
+<body>
+
+<!-- ═══ SETUP SCREEN ═══ -->
+<div id="setup-screen">
+  <div class="setup-box">
+    <span class="setup-logo">⬡</span>
+    <div class="setup-title">Windmill Cafe & Roastery</div>
+    <div class="setup-sub">One-time Firebase Setup — takes 3 minutes</div>
+
+    <div class="setup-step">
+      <div class="setup-num">1</div>
+      <div class="setup-step-text">
+        Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> → <strong>Create a project</strong> (any name, e.g. <em>windmill-stock</em>) → Disable Google Analytics → Create Project.
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="setup-num">2</div>
+      <div class="setup-step-text">
+        In your project, click <strong>Build → Realtime Database → Create Database</strong>. Choose any location. Select <strong>"Start in test mode"</strong> → Enable.
+      </div>
+    </div>
+    <div class="setup-step">
+      <div class="setup-num">3</div>
+      <div class="setup-step-text">
+        Click the <strong>⚙️ gear icon → Project Settings → scroll to "Your apps" → click &lt;/&gt; Web</strong>. Register the app (any name). Copy the <code>firebaseConfig</code> values into the fields below.
+      </div>
+    </div>
+
+    <hr class="setup-divider">
+
+    <div class="form-row" style="gap:10px">
+      <div class="form-field" style="flex:2 1 200px">
+        <label style="display:block;font-size:9px;color:#8a7050;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.1em">Database URL</label>
+        <input class="setup-inp" id="cfg-dburl" placeholder="https://your-project-default-rtdb.firebaseio.com">
+      </div>
+      <div class="form-field">
+        <label style="display:block;font-size:9px;color:#8a7050;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.1em">API Key</label>
+        <input class="setup-inp" id="cfg-apikey" placeholder="AIzaSy...">
+      </div>
+      <div class="form-field">
+        <label style="display:block;font-size:9px;color:#8a7050;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.1em">Project ID</label>
+        <input class="setup-inp" id="cfg-projectid" placeholder="your-project-id">
+      </div>
+    </div>
+
+    <button class="setup-connect-btn" id="setupConnectBtn">Connect & Launch Dashboard →</button>
+    <div class="setup-err" id="setup-err"></div>
+
+    <hr class="setup-divider">
+    <div class="setup-note">
+      🔒 Firebase free tier (Spark plan) — 1 GB storage, 10 GB/month. No credit card needed.<br>
+      After setup, your boss and team see the same live data from any device, anywhere.
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MAIN APP ═══ -->
+<div id="app" style="display:none"></div>
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════════════════════
+   FIREBASE CONFIG — filled in by setup screen
+══════════════════════════════════════════════════════ */
+var FB_CONFIG = null; // set by setup
+var fbDB = null;      // firebase database instance
+var fbRef = null;     // root ref: /windmill-stock
+
+/* ══════════════════════════════════════════════════════
+   SETUP SCREEN LOGIC
+══════════════════════════════════════════════════════ */
+document.getElementById('setupConnectBtn').onclick = function() {
+  var dburl     = document.getElementById('cfg-dburl').value.trim();
+  var apikey    = document.getElementById('cfg-apikey').value.trim();
+  var projectid = document.getElementById('cfg-projectid').value.trim();
+  var errEl     = document.getElementById('setup-err');
+
+  if(!dburl || !apikey || !projectid) {
+    errEl.textContent = 'Please fill in all three fields.'; return;
+  }
+  if(!dburl.includes('firebaseio.com')) {
+    errEl.textContent = 'Database URL should end with .firebaseio.com'; return;
+  }
+  errEl.textContent = 'Connecting…';
+
+  try {
+    // Initialise Firebase
+    var app = firebase.initializeApp({
+      apiKey: apikey,
+      authDomain: projectid + '.firebaseapp.com',
+      databaseURL: dburl,
+      projectId: projectid,
+      storageBucket: projectid + '.appspot.com'
+    });
+    fbDB  = firebase.database(app);
+    fbRef = fbDB.ref('windmill-stock');
+
+    // Test connection with a quick read
+    fbRef.child('_ping').set(Date.now()).then(function() {
+      // Save config for next time
+      try { localStorage.setItem('wc-fb-dburl', dburl); localStorage.setItem('wc-fb-apikey', apikey); localStorage.setItem('wc-fb-projectid', projectid); } catch(e) {}
+      document.getElementById('setup-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      bootApp();
+    }).catch(function(err) {
+      errEl.textContent = 'Connection failed: ' + (err.message || 'Check your details.');
+    });
+  } catch(e) {
+    errEl.textContent = 'Error: ' + (e.message || 'Invalid config.');
+  }
+};
+
+// Auto-fill saved config and skip setup if already configured
+(function() {
+  try {
+    var dburl     = localStorage.getItem('wc-fb-dburl');
+    var apikey    = localStorage.getItem('wc-fb-apikey');
+    var projectid = localStorage.getItem('wc-fb-projectid');
+    if(dburl && apikey && projectid) {
+      document.getElementById('cfg-dburl').value      = dburl;
+      document.getElementById('cfg-apikey').value     = apikey;
+      document.getElementById('cfg-projectid').value  = projectid;
+      // Auto-connect
+      setTimeout(function() { document.getElementById('setupConnectBtn').click(); }, 100);
+    }
+  } catch(e) {}
+})();
+
+/* ══════════════════════════════════════════════════════
+   DEFAULT ITEMS
+══════════════════════════════════════════════════════ */
+var DEFAULTS = [
+  {id:1, name:'Ethiopia Yirgacheffe', category:'Single Origin', origin:'Ethiopia 🇪🇹',   unit:'kg', balance:285, threshold:50},
+  {id:2, name:'Colombia Huila',       category:'Single Origin', origin:'Colombia 🇨🇴',   unit:'kg', balance:190, threshold:40},
+  {id:3, name:'Guatemala Antigua',    category:'Single Origin', origin:'Guatemala 🇬🇹',  unit:'kg', balance:42,  threshold:50},
+  {id:4, name:'Brazil Santos',        category:'Espresso',      origin:'Brazil 🇧🇷',      unit:'kg', balance:320, threshold:80},
+  {id:5, name:'Sumatra Mandheling',   category:'Single Origin', origin:'Indonesia 🇮🇩',  unit:'kg', balance:0,   threshold:40},
+  {id:6, name:'House Blend',          category:'Blend',         origin:'House Roast ☕',  unit:'kg', balance:155, threshold:60},
+  {id:7, name:'Decaf Colombia',       category:'Decaf',         origin:'Colombia 🇨🇴',   unit:'kg', balance:28,  threshold:30},
+  {id:8, name:'Kenya AA',             category:'Single Origin', origin:'Kenya 🇰🇪',       unit:'kg', balance:88,  threshold:35}
+];
+
+/* ══════════════════════════════════════════════════════
+   APP STATE
+══════════════════════════════════════════════════════ */
+var S = {
+  view:'dashboard', items:[], history:[], password:'windmill2024',
+  teamUnlocked:false,
+  showLogin:false, loginErr:false, loginShake:false,
+  filter:'All', search:'',
+  lastSync:null, syncing:false, flashId:null,
+  pendingUpdate:false,
+  logModal:null, logType:'IN', logQty:'', logNote:'', logErr:'',
+  showAddItem:false, newItem:null,
+  showCPwd:false, cpOld:'', cpNew:'', cpConf:'', cpErr:'',
+  toast:null, toastTimer:null,
+  // Reports
+  rptItem: null, rptFrom: '', rptTo: '', rptCat: 'All', rptSort: 'date',
+  comments: {},
+  categories: ['Single Origin','Espresso','Blend','Filter','Milk','Equipment','Other'],
+  showCatMgr: false, newCatName: '',
+  tpFilterCat: 'All', tpFilterStatus: 'All', tpFilterSearch: '',
+  editBalId: null, editBalVal: '', openCommentId: null,
+  dashSort: 'name'
+};
+
+/* ══════════════════════════════════════════════════════
+   BUSY GUARD — prevents re-render while user is typing
+══════════════════════════════════════════════════════ */
+function isBusy() {
+  // Any modal open
+  if(S.showLogin || S.logModal !== null) return true;
+  // Any inline form active
+  if(S.showAddItem || S.showCPwd) return true;
+  // Any input/textarea has focus
+  var a = document.activeElement;
+  if(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')) return true;
+  return false;
+}
+
+/* ══════════════════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════════════════ */
+function getStatus(bal, thr) { return bal === 0 ? 'OUT' : bal < thr ? 'LOW' : 'OK'; }
+var SM = {
+  OK:  {lbl:'IN STOCK', cls:'badge-ok',  color:'var(--green)',  bar:'var(--green)'},
+  LOW: {lbl:'LOW STOCK',cls:'badge-low', color:'var(--orange)', bar:'var(--orange)'},
+  OUT: {lbl:'OUT',      cls:'badge-out', color:'var(--red)',    bar:'var(--red)'}
+};
+function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function todayStr() { return new Date().toDateString(); }
+function fmtTime(d) { return d ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'; }
+function fmtDate(d) { return d ? d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'; }
+function todayMoves(itemId, type) {
+  var tod = todayStr();
+  return S.history.filter(function(e) {
+    /* Use == not === and Number() to handle Firebase string/number coercion */
+    var itemMatch = !itemId || Number(e.itemId) === Number(itemId);
+    var typeMatch = !type || e.type === type;
+    var dateMatch = new Date(e.ts).toDateString() === tod;
+    return dateMatch && itemMatch && typeMatch;
+  }).reduce(function(s, e) { return s + Number(e.qty); }, 0);
+}
+function showToast(msg, dur) {
+  if(S.toastTimer) clearTimeout(S.toastTimer);
+  S.toast = msg; render();
+  S.toastTimer = setTimeout(function() { S.toast = null; render(); }, dur || 2800);
+}
+
+/* ══════════════════════════════════════════════════════
+   DAILY LEDGER BUILDER
+   Returns array of day rows: { date, open, in, out, waste, adj, close }
+   Carries forward closing → next day opening automatically.
+══════════════════════════════════════════════════════ */
+function buildDailyLedger(itemId, fromDate, toDate) {
+  // Filter history for this item in range, oldest first
+  var entries = S.history.filter(function(e){
+    var d = new Date(e.ts);
+    var match = !itemId || Number(e.itemId) === Number(itemId);
+    return match && d >= fromDate && d <= toDate;
+  }).slice().sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
+
+  if(!entries.length) return [];
+
+  // Find the item's current balance and work backwards to get opening
+  var item = itemId ? S.items.find(function(i){ return Number(i.id)===Number(itemId); }) : null;
+
+  // Build map: dateStr → { in, out, waste, adj }
+  var dayMap = {};
+  entries.forEach(function(e){
+    var d = new Date(e.ts);
+    var key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if(!dayMap[key]) dayMap[key]={in:0,out:0,waste:0,adj:0};
+    if(e.type==='IN')    dayMap[key].in    += Number(e.qty);
+    else if(e.type==='OUT') dayMap[key].out += Number(e.qty);
+    else if(e.type==='WASTE') dayMap[key].waste += Number(e.qty);
+    else if(e.type==='ADJ')   dayMap[key].adj   += Number(e.qty);
+  });
+
+  var days = Object.keys(dayMap).sort();
+
+  // Compute opening for first day by walking backwards from current balance
+  // Sum all IN after period end, subtract all OUT/WASTE/ADJ after period end
+  var currentBal = item ? item.balance : S.items.reduce(function(s,i){ return s+i.balance; },0);
+  var afterEntries = S.history.filter(function(e){
+    var d = new Date(e.ts);
+    var match = !itemId || Number(e.itemId) === Number(itemId);
+    return match && d > toDate;
+  });
+  var runningBal = currentBal;
+  afterEntries.forEach(function(e){
+    if(e.type==='IN') runningBal -= Number(e.qty);
+    else runningBal += Number(e.qty);
+  });
+  // Also subtract entries within range that happened after first day
+  var firstDayStr = days[0];
+
+  // Build rows with carry-forward
+  var rows = [];
+  var open = runningBal;
+  // Walk from first day back: subtract this day's net to get opening
+  // Actually: compute open of first day = runningBal minus all in-range-days net
+  var totalInRange = {in:0,out:0,waste:0,adj:0};
+  days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
+  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
+
+  open = periodOpenBal;
+  days.forEach(function(dk){
+    var r = dayMap[dk];
+    var close = open + r.in - r.out - r.waste - r.adj;
+    rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
+    open = close;
+  });
+  return rows;
+}
+
+function defaultDateRange() {
+  var to = new Date();
+  var from = new Date(); from.setDate(from.getDate()-29);
+  function fmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  return { from: fmt(from), to: fmt(to) };
+}
+
+/* Category-wise ledger: aggregates multiple items */
+function buildCategoryLedger(itemIds, fromDate, toDate) {
+  // Build combined daily ledger across multiple item IDs
+  var entries = S.history.filter(function(e){
+    var d = new Date(e.ts);
+    var match = itemIds.indexOf(Number(e.itemId)) >= 0 || itemIds.indexOf(String(e.itemId)) >= 0;
+    return match && d >= fromDate && d <= toDate;
+  }).slice().sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
+
+  if(!entries.length) return [];
+  var dayMap = {};
+  entries.forEach(function(e){
+    var d = new Date(e.ts);
+    var key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    if(!dayMap[key]) dayMap[key]={in:0,out:0,waste:0,adj:0};
+    if(e.type==='IN') dayMap[key].in += Number(e.qty);
+    else if(e.type==='OUT') dayMap[key].out += Number(e.qty);
+    else if(e.type==='WASTE') dayMap[key].waste += Number(e.qty);
+    else if(e.type==='ADJ') dayMap[key].adj += Number(e.qty);
+  });
+  var days = Object.keys(dayMap).sort();
+  var catBalance = S.items.filter(function(i){ return itemIds.indexOf(i.id)>=0||itemIds.indexOf(Number(i.id))>=0; })
+    .reduce(function(s,i){ return s+i.balance; },0);
+  var afterEntries = S.history.filter(function(e){
+    var d = new Date(e.ts);
+    return (itemIds.indexOf(Number(e.itemId))>=0) && d > toDate;
+  });
+  var runningBal = catBalance;
+  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
+  var totalInRange = {in:0,out:0,waste:0,adj:0};
+  days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
+  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
+  var rows = [];
+  days.forEach(function(dk){
+    var r = dayMap[dk];
+    var close = open + r.in - r.out - r.waste - r.adj;
+    rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
+    open = close;
+  });
+  return rows;
+}
+
+/* ══════════════════════════════════════════════════════
+   FIREBASE READ/WRITE
+   KEY FIX: use fbRef.update() (atomic) instead of two
+   separate .set() calls. Two separate writes caused a
+   race: the .on() listener fired after the first write
+   and read stale history — wiping In/Out Today to 0.
+   Also: _ignoreRemote flag blocks our own echo-backs.
+══════════════════════════════════════════════════════ */
+var _ignoreRemote = false; // blocks echo from our own saves
+
+function saveAll() {
+  _ignoreRemote = true;
+  fbRef.update({ items: S.items, history: S.history, comments: S.comments, categories: S.categories }, function() {
+    setTimeout(function() { _ignoreRemote = false; }, 800);
+  });
+}
+function savePassword(p) { fbRef.child('password').set(p); }
+
+function applyRemoteData(data, flash) {
+  /* Skip echo-backs from our own writes */
+  if(_ignoreRemote) return;
+
+  /* Called when Firebase pushes new data */
+  var items      = data.items      ? objToArr(data.items)   : null;
+  var history    = data.history    ? objToArr(data.history) : [];
+  var password   = data.password   || 'windmill2024';
+  var comments   = data.comments   || {};
+  var categories = data.categories ? (Array.isArray(data.categories) ? data.categories : Object.values(data.categories)) : null;
+
+  if(items) {
+    if(flash && S.items.length) {
+      var changed = items.filter(function(n) {
+        var o = S.items.find(function(x){ return x.id === n.id; });
+        return o && o.balance !== n.balance;
+      });
+      if(changed.length) {
+        S.flashId = changed[0].id;
+        setTimeout(function(){ S.flashId = null; if(!isBusy()) render(); }, 1000);
+      }
+    }
+    S.items = items;
+  }
+  S.history = history;
+  S.password = password;
+  S.comments = comments;
+  if(categories) S.categories = categories;
+  S.lastSync = new Date();
+  S.syncing  = false;
+
+  if(isBusy()) {
+    // User is editing — flag pending update but DON'T re-render
+    S.pendingUpdate = true;
+    showPendingBanner(true);
+  } else {
+    S.pendingUpdate = false;
+    render();
+  }
+}
+
+// Firebase stores objects with auto keys; convert back to array
+function objToArr(obj) {
+  if(Array.isArray(obj)) return obj;
+  return Object.keys(obj).map(function(k){ return obj[k]; });
+}
+
+/* ══════════════════════════════════════════════════════
+   PENDING BANNER (non-intrusive update indicator)
+══════════════════════════════════════════════════════ */
+function showPendingBanner(show) {
+  var el = document.getElementById('pending-banner');
+  if(!el) return;
+  el.className = show ? '' : 'hidden';
+}
+
+/* Whenever user finishes editing (blur on any input), apply pending update */
+document.addEventListener('blur', function() {
+  setTimeout(function() {
+    if(S.pendingUpdate && !isBusy()) {
+      S.pendingUpdate = false;
+      showPendingBanner(false);
+      render();
+    }
+  }, 150);
+}, true);
+
+/* ══════════════════════════════════════════════════════
+   ACTIONS
+══════════════════════════════════════════════════════ */
+function doLogin() {
+  var el = document.getElementById('loginInput');
+  var val = el ? el.value : '';
+  if(val === S.password) {
+    S.teamUnlocked = true; S.showLogin = false; S.loginErr = false; S.view = 'team'; render();
+  } else {
+    S.loginErr = true; S.loginShake = true; render();
+    setTimeout(function(){ S.loginShake = false; render(); }, 600);
+  }
+}
+function doLock() { S.teamUnlocked = false; S.view = 'dashboard'; S.logModal = null; S.showAddItem = false; S.showCPwd = false; render(); }
+
+function logMovement(itemId, type, qty, note) {
+  var item = S.items.find(function(i){ return i.id === itemId; });
+  if(!item) return;
+  // IN = add; OUT / WASTE / ADJ = subtract
+  var newBal = type === 'IN' ? item.balance + qty : Math.max(0, item.balance - qty);
+  S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:newBal}) : i; });
+  S.history = [{
+    id: Date.now(), ts: new Date().toISOString(),
+    itemId: itemId, itemName: item.name,
+    type: type, qty: qty, note: note||''
+  }].concat(S.history).slice(0, 500);
+  S.logModal = null; S.logQty = ''; S.logNote = ''; S.logErr = '';
+  saveAll();
+  var icons = {IN:'📥',OUT:'📤',WASTE:'🗑',ADJ:'✏️'};
+  showToast((icons[type]||'•')+' '+qty+' '+item.unit+' logged as '+type+' for '+item.name);
+  render();
+}
+function addItem(item) {
+  S.items = S.items.concat([Object.assign({},item,{id:Date.now()})]);
+  S.newItem = null; S.showAddItem = false;
+  saveAll(); showToast('✅ '+item.name+' added.'); render();
+}
+function deleteItem(id) {
+  if(!confirm('Delete this item?')) return;
+  var item = S.items.find(function(i){ return i.id === id; });
+  S.items = S.items.filter(function(i){ return i.id !== id; });
+  saveAll(); showToast('🗑 '+item.name+' removed.'); render();
+}
+function changePwd(np) {
+  S.password = np; S.showCPwd = false; S.cpOld = S.cpNew = S.cpConf = S.cpErr = '';
+  savePassword(np); showToast('🔑 Password updated.'); render();
+}
+
+function clearAllHistory() {
+  if(!confirm('⚠️ Delete ALL movement history?\n\nThis cannot be undone. Stock balances will NOT change — only the history log is cleared.')) return;
+  S.history = [];
+  fbRef.child('history').remove();
+  showToast('🗑 All history cleared.'); render();
+}
+
+function deleteHistoryDay(day) {
+  var label = day === new Date().toDateString() ? 'today' : day === new Date(Date.now()-86400000).toDateString() ? 'yesterday' : day;
+  if(!confirm('Delete all entries for '+label+'?\n\nNote: stock balances will NOT be changed.')) return;
+  S.history = S.history.filter(function(e){ return new Date(e.ts).toDateString() !== day; });
+  saveAll(); showToast('🗑 Deleted all entries for '+label+'.'); render();
+}
+
+function deleteHistoryEntry(entryId) {
+  if(!confirm('Delete this entry from history?\n\nNote: the stock balance will NOT be changed. Use ↩ Reverse if you also want to fix the balance.')) return;
+  S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
+  saveAll(); showToast('🗑 Entry deleted.'); render();
+}
+
+function reverseEntry(entryId) {
+  var entry = S.history.find(function(e){ return String(e.id) === String(entryId); });
+  if(!entry) return;
+  var item = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
+  if(!item) { showToast('⚠️ Item no longer exists.'); return; }
+  if(!confirm('Reverse this entry?\n\n'+entry.type+' '+entry.qty+' '+item.unit+' for "'+item.name+'"\n\nThis will undo the balance change.')) return;
+  // Reverse the balance: IN → subtract, OUT → add
+  var newBal = entry.type === 'IN'
+    ? Math.max(0, item.balance - entry.qty)
+    : item.balance + entry.qty;
+  S.items = S.items.map(function(i){ return i.id === item.id ? Object.assign({},i,{balance:newBal}) : i; });
+  // Remove the original entry and add a reversal note
+  S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
+  S.history = [{
+    id: Date.now(), ts: new Date().toISOString(),
+    itemId: item.id, itemName: item.name,
+    type: entry.type === 'IN' ? 'OUT' : 'IN',
+    qty: entry.qty,
+    note: '↩ REVERSAL of '+entry.type+' entry'+(entry.note?' (was: '+entry.note+')':'')
+  }].concat(S.history).slice(0,100);
+  saveAll();
+  showToast('↩ Entry reversed for '+item.name);
+  render();
+}
+
+/* ══════════════════════════════════════════════════════
+   COMMENT ACTIONS
+══════════════════════════════════════════════════════ */
+function addComment(entryId, text) {
+  if(!text || !text.trim()) return;
+  var key = String(entryId);
+  if(!S.comments[key]) S.comments[key] = [];
+  S.comments[key].push({ text: text.trim(), ts: new Date().toISOString(), user: 'Team' });
+  saveAll();
+  showToast('💬 Comment added.');
+  render();
+}
+function deleteComment(entryId, idx) {
+  var key = String(entryId);
+  if(!S.comments[key]) return;
+  S.comments[key].splice(idx, 1);
+  saveAll(); render();
+}
+
+/* ══════════════════════════════════════════════════════
+   CATEGORY ACTIONS
+══════════════════════════════════════════════════════ */
+function addCategory(name) {
+  if(!name || !name.trim()) return;
+  var n = name.trim();
+  if(S.categories.indexOf(n) >= 0) { showToast('Category already exists.'); return; }
+  S.categories = S.categories.concat([n]);
+  S.newCatName = '';
+  saveAll(); showToast('✅ Category "'+n+'" added.'); render();
+}
+function deleteCategory(name) {
+  if(!confirm('Delete category "'+name+'"? Items using it will keep their current category value.')) return;
+  S.categories = S.categories.filter(function(c){ return c !== name; });
+  saveAll(); showToast('🗑 Category deleted.'); render();
+}
+
+/* ══════════════════════════════════════════════════════
+   INLINE BALANCE EDIT
+══════════════════════════════════════════════════════ */
+function saveEditedBalance(itemId, val) {
+  var n = parseFloat(val);
+  if(isNaN(n) || n < 0) { showToast('⚠️ Invalid value.'); return; }
+  var item = S.items.find(function(i){ return i.id === itemId; });
+  if(!item) return;
+  var old = item.balance;
+  S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:n}) : i; });
+  S.history = [{
+    id: Date.now(), ts: new Date().toISOString(),
+    itemId: itemId, itemName: item.name,
+    type: 'ADJ', qty: Math.abs(n - old),
+    note: '✏️ Manual balance edit: '+old+' → '+n
+  }].concat(S.history).slice(0,500);
+  S.editBalId = null; S.editBalVal = '';
+  saveAll(); showToast('✏️ Balance updated to '+n+' '+item.unit); render();
+}
+
+/* ══════════════════════════════════════════════════════
+   EXPORT CSV
+══════════════════════════════════════════════════════ */
+function exportCSV() {
+  if(!S.rptRows || !S.rptRows.length) { showToast('No report data to export.'); return; }
+  var selectedItem = S.rptItem ? S.items.find(function(i){ return String(i.id)===String(S.rptItem); }) : null;
+  var title = (selectedItem ? selectedItem.name : 'All Products') + ' | ' + S.rptFrom + ' to ' + S.rptTo;
+  var lines = ['Date,Opening,IN,OUT,Waste,Adj,Closing'];
+  S.rptRows.forEach(function(r){
+    var d = new Date(r.date+'T12:00:00');
+    var dl = d.toLocaleDateString([],{day:'2-digit',month:'short',year:'numeric'});
+    lines.push([dl, r.open, r.in, r.out, r.waste, r.adj, r.close].join(','));
+  });
+  var csv = 'Windmill Cafe & Roastery \u2014 Stock Report\n'+title+'\n\n'+lines.join('\n');
+  var blob = new Blob([csv], {type:'text/csv'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'windmill-report-'+S.rptFrom+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('📥 CSV exported!');
+}
+
+/* ══════════════════════════════════════════════════════
+   RENDER
+══════════════════════════════════════════════════════ */
+function render() {
+  var app = document.getElementById('app');
+  if(!app || app.style.display === 'none') return;
+  var h = '';
+
+  /* OVERLAY: Login */
+  if(S.showLogin) {
+    h += '<div id="overlay"><div class="modal"><div class="modal-hdr"><div class="modal-icon">🔒</div>'
+      +'<div><div class="modal-title">Team Access</div><div class="modal-sub">Enter your team password to continue</div></div></div>'
+      +'<div class="modal-body">'
+      +'<div class="'+(S.loginShake?'shake':'')+'"><label style="display:block;font-size:9px;color:var(--cream3);margin-bottom:6px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600">Password</label>'
+      +'<input type="password" id="loginInput" class="modal-login-input'+(S.loginErr?' err':'')+'" placeholder="Enter team password" autocomplete="off">'
+      +(S.loginErr?'<div class="err-msg">Incorrect password. Try again.</div>':'')
+      +'</div></div>'
+      +'<div class="modal-foot" style="flex-direction:column;gap:8px;">'
+      +'<button class="btn-unlock" id="loginBtn">Unlock Team Panel →</button>'
+      +'<button class="btn-cancel" id="loginClose" style="text-align:center">Cancel</button>'
+      +'</div></div></div>';
+  }
+
+  /* OVERLAY: Log Movement */
+  if(S.logModal) {
+    var lItem = S.items.find(function(i){ return i.id === S.logModal; });
+    if(lItem) {
+      h += '<div id="overlay"><div class="modal">'
+        +'<div class="modal-hdr"><div class="modal-icon">'+(S.logType==='IN'?'📥':'📤')+'</div>'
+        +'<div><div class="modal-title">'+esc(lItem.name)+'</div>'
+        +'<div class="modal-sub">Current balance: '+lItem.balance+' '+esc(lItem.unit)+'</div></div></div>'
+        +'<div class="modal-body">'
+        +'<div class="modal-type-toggle">'
+        +'<button class="type-opt'+(S.logType==='IN'?' sel-in':'')+'" id="typeIn">📥 IN</button>'
+        +'<button class="type-opt'+(S.logType==='OUT'?' sel-out':'')+'" id="typeOut">📤 OUT</button>'
+        +'<button class="type-opt'+(S.logType==='WASTE'?' sel-waste':'')+'" id="typeWaste">🗑 WASTE</button>'
+        +'<button class="type-opt'+(S.logType==='ADJ'?' sel-adj':'')+'" id="typeAdj">✏️ ADJUST</button>'
+        +'</div>'
+        +'<div class="form-row">'
+        +'<div class="form-field" style="flex:1 1 140px"><label>Quantity ('+esc(lItem.unit)+')</label>'
+        +'<input type="number" class="inp" id="logQtyInput" value="'+esc(S.logQty)+'" placeholder="0" min="0.01" step="0.01" autocomplete="off"></div>'
+        +'<div class="form-field" style="flex:2 1 180px"><label>Note (optional)</label>'
+        +'<input type="text" class="inp" id="logNoteInput" value="'+esc(S.logNote)+'" placeholder="Batch #, supplier, reason…" autocomplete="off"></div>'
+        +'</div>'
+        +(S.logErr?'<div class="err-txt" style="margin-top:8px">'+esc(S.logErr)+'</div>':'')
+        +'</div>'
+        +'<div class="modal-foot">'
+        +'<button class="btn-save" id="logSaveBtn" style="flex:1">'+(S.logType==='IN'?'📥 Record Stock In':S.logType==='OUT'?'📤 Record Stock Out':S.logType==='WASTE'?'🗑 Record Waste':'✏️ Record Adjustment')+'</button>'
+        +'<button class="btn-cancel" id="logCancelBtn">Cancel</button>'
+        +'</div></div></div>';
+    }
+  }
+
+  /* HEADER */
+  var sync = S.syncing;
+  h += '<div id="header">'
+    +'<div class="h-brand"><svg class="h-logo" viewBox="0 0 36 38" fill="none">'
+    +'<g class="h-blades" style="transform-origin:18px 17px">'
+    +'<path d="M18 17 L15 2 L21 2 Z" fill="var(--gold2)"/><path d="M18 17 L33 14 L33 20 Z" fill="var(--gold)"/>'
+    +'<path d="M18 17 L21 32 L15 32 Z" fill="var(--gold2)"/><path d="M18 17 L3 20 L3 14 Z" fill="var(--gold)"/>'
+    +'</g><circle cx="18" cy="17" r="3.5" fill="var(--gold3)"/>'
+    +'<rect x="16.5" y="19.5" width="3" height="16" rx="1.5" fill="var(--cream3)" opacity="0.6"/>'
+    +'<ellipse cx="18" cy="35.5" rx="6" ry="1.5" fill="var(--cream3)" opacity="0.3"/></svg>'
+    +'<div><div class="h-title">Windmill Cafe & Roastery</div><div class="h-sub">Live Stock Dashboard</div></div></div>'
+    +'<div class="h-nav">'
+    +'<button class="nav-btn'+(S.view==='dashboard'?' active-dash':'')+'" id="navDash">☕ Overview</button>'
+    +'<button class="nav-btn'+(S.view==='balance'?' active-bal':'')+'" id="navBal">⚖️ Balance</button>'
+    +'<button class="nav-btn'+(S.view==='report'?' active-rpt':'')+'" id="navRpt">📊 Reports</button>'
+    +(function(){ var lowCount = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)!=='OK'; }).length; return '<button class="nav-btn'+(S.view==='provision'?' active-prov':'')+'" id="navProv">📋 Provisioning'+(lowCount?' <span style="background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">'+lowCount+'</span>':'')+'</button>'; })()
+    +'<button class="nav-btn '+(S.teamUnlocked?'active-team':'locked-team')+'" id="navTeam">'+(S.teamUnlocked?'✏️':'🔒')+' Team Panel</button>'
+    +'</div>'
+    +'<div class="h-right">'
+    +(S.teamUnlocked?'<button class="lock-btn" id="lockBtn">🔓 Lock</button>':'')
+    +'<div class="live-dot" style="background:'+(sync?'var(--orange)':'var(--green)')+';box-shadow:0 0 6px '+(sync?'var(--orange)':'var(--green)')+';animation:'+(sync?'spin 1s linear infinite':'pulse 2s infinite')+'"></div>'
+    +'<span class="live-txt" style="color:'+(sync?'var(--orange)':'var(--green)')+'">'+(sync?'SYNCING':'● LIVE')+'</span>'
+    +'<button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>'
+    +'</div></div>';
+
+  /* PENDING UPDATE BANNER */
+  h += '<div id="pending-banner" class="'+(S.pendingUpdate?'visible':'hidden')+'">'
+    +'<div class="pending-dot"></div>'
+    +'New stock data received — will refresh when you finish editing.'
+    +'</div>';
+
+  /* METRICS */
+  var todIn   = todayMoves(null,'IN');
+  var todOut  = todayMoves(null,'OUT');
+  var totBal  = S.items.reduce(function(s,i){ return s+i.balance; },0);
+  h += '<div class="metrics">'
+    +'<div class="metric"><div class="metric-val" style="color:var(--gold2)">'+totBal.toLocaleString()+'</div><div class="metric-lbl">Total Balance</div><div class="metric-sub">kg on hand</div></div>'
+    +'<div class="metric"><div class="metric-val" style="color:var(--green)">+'+todIn.toLocaleString()+'</div><div class="metric-lbl">In Today</div><div class="metric-sub">kg received</div></div>'
+    +'<div class="metric"><div class="metric-val" style="color:var(--red)">-'+todOut.toLocaleString()+'</div><div class="metric-lbl">Out Today</div><div class="metric-sub">kg used/sold</div></div>'
+    +'<div class="metric"><div class="metric-val" style="font-size:15px;color:'+(sync?'var(--orange)':'var(--cream)')+';margin-top:2px">'+fmtTime(S.lastSync)+'</div><div class="metric-lbl">Last Updated</div><div class="metric-sub">'+fmtDate(S.lastSync)+'</div></div>'
+    +'</div>';
+
+  /* NOTICE */
+  h += '<div class="notice '+(S.teamUnlocked?'edit':'view')+'">'
+    +(S.teamUnlocked
+      ? '🟢 <strong style="color:var(--green)">Team panel active.</strong> Changes sync to all devices instantly. <span style="color:var(--orange);text-decoration:underline;cursor:pointer" id="lockLink">Lock when finished →</span>'
+      : '👁 <strong>Management view</strong> — read-only live data. Updates push to this screen in real time. Your stock team uses 🔒 Team Panel to update stock.')
+    +'</div>';
+
+  /* ── DASHBOARD ── */
+  if(S.view === 'dashboard') {
+    var cats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
+    // Summary cards
+    var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
+    var outCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
+    h += '<div style="display:flex;gap:8px;padding:14px 20px 0;flex-wrap:wrap;">'
+      +'<div style="flex:1 1 120px;background:var(--surf);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;text-align:center;">'
+      +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:20px;color:var(--gold2);font-weight:600">'+S.items.length+'</div>'
+      +'<div style="font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px">Total Items</div></div>'
+      +'<div style="flex:1 1 120px;background:var(--surf);border:1px solid var(--orng-bd);border-radius:10px;padding:10px 14px;text-align:center;">'
+      +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:20px;color:var(--orange);font-weight:600">'+lowCnt+'</div>'
+      +'<div style="font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px">Low Stock</div></div>'
+      +'<div style="flex:1 1 120px;background:var(--surf);border:1px solid var(--red-bd);border-radius:10px;padding:10px 14px;text-align:center;">'
+      +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:20px;color:var(--red);font-weight:600">'+outCnt+'</div>'
+      +'<div style="font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px">Out of Stock</div></div>'
+      +'</div>';
+    h += '<div class="filter-row"><div class="chips">'
+      +cats.map(function(c){ return '<button class="chip'+(S.filter===c?' on':'')+'" data-filter="'+esc(c)+'">'+esc(c)+'</button>'; }).join('')
+      +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center;">'
+      +'<span style="font-size:9px;color:var(--cream3);letter-spacing:0.08em;">SORT:</span>'
+      +'<button class="sort-btn'+(S.dashSort==='name'?' on':'')+'" data-dsort="name">Name</button>'
+      +'<button class="sort-btn'+(S.dashSort==='stock'?' on':'')+'" data-dsort="stock">Stock</button>'
+      +'<button class="sort-btn'+(S.dashSort==='status'?' on':'')+'" data-dsort="status">Status</button>'
+      +'<input class="search-input" id="searchInput" placeholder="🔍 Search…" value="'+esc(S.search)+'" style="width:130px"></div></div>';
+
+    var filtered = S.items.filter(function(i){
+      return (S.filter==='All'||i.category===S.filter) && i.name.toLowerCase().includes(S.search.toLowerCase());
+    });
+    // Apply sort
+    var sortOrd = {OK:2, LOW:1, OUT:0};
+    if(S.dashSort==='name') filtered.sort(function(a,b){ return a.name.localeCompare(b.name); });
+    else if(S.dashSort==='stock') filtered.sort(function(a,b){ return b.balance - a.balance; });
+    else if(S.dashSort==='status') filtered.sort(function(a,b){ return sortOrd[getStatus(a.balance,a.threshold)] - sortOrd[getStatus(b.balance,b.threshold)]; });
+    if(!filtered.length) {
+      h += '<div class="empty">No items match your search.</div>';
+    } else {
+      h += '<div class="grid">';
+      filtered.forEach(function(item){
+        var st = getStatus(item.balance, item.threshold), m = SM[st];
+        var pct = Math.min(100, Math.round((item.balance/Math.max(item.threshold*4,1))*100));
+        var tIn = todayMoves(item.id,'IN'), tOut = todayMoves(item.id,'OUT');
+        h += '<div class="card'+(S.flashId===item.id?' flash':'')+'" style="border-color:'+(st==='OK'?'var(--border2)':st==='LOW'?'var(--orng-bd)':'var(--red-bd)')+'">'
+          +'<div class="card-top"><div><div class="card-name">'+esc(item.name)+'</div>'
+          +'<div class="card-cat">'+esc(item.category)+' · '+esc(item.origin)+'</div></div>'
+          +'<span class="badge '+m.cls+'">'+m.lbl+'</span></div>'
+          +'<div class="card-qty"><span class="card-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+'</span><span class="card-unit">'+esc(item.unit)+'</span></div>'
+          +'<div class="card-moves"><span class="move-in">'+(tIn>0?'📥 +'+tIn+' today':'—')+'</span><span class="move-out">'+(tOut>0?'📤 -'+tOut+' today':'—')+'</span></div>'
+          +'<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%;background:'+m.color+'"></div></div>'
+          +'<div class="card-min">Min threshold: '+item.threshold+' '+esc(item.unit)+'</div>'
+          +'</div>';
+      });
+      h += '</div>';
+    }
+    if(S.history.length) {
+      h += '<div class="section-label">Recent Movements</div>';
+      h += '<div class="hist-panel"><div class="hist-head"><span>Movement Log</span><span style="font-size:9px">Last '+Math.min(S.history.length,20)+' records</span></div><div class="hist-scroll">';
+      S.history.slice(0,20).forEach(function(e){
+        var isIn = e.type==='IN';
+        h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
+          +'<span class="hist-name">'+esc(e.itemName)+'</span>'
+          +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
+          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+          +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
+      });
+      h += '</div></div>';
+    }
+  }
+
+  /* ── BALANCE ── */
+  if(S.view === 'balance') {
+    var tod2 = todayStr();
+    h += '<div class="section-label">Item-by-Item Stock Balance</div>';
+    h += '<div class="bal-wrap"><div class="bal-hdr"><span>Coffee Bean</span><span>In Today</span><span>Out Today</span><span>Balance</span><span>Status</span></div>';
+    S.items.forEach(function(item){
+      var st = getStatus(item.balance, item.threshold), m = SM[st];
+      var iIn = todayMoves(item.id,'IN'), iOut = todayMoves(item.id,'OUT');
+      h += '<div class="bal-row"><span class="bal-name">'+esc(item.name)+'<br><span style="font-size:9px;color:var(--cream3);font-family:\'Barlow Condensed\'">'+esc(item.origin)+'</span></span>'
+        +'<span class="bal-in">'+(iIn>0?'+'+iIn+' kg':'—')+'</span>'
+        +'<span class="bal-out">'+(iOut>0?'-'+iOut+' kg':'—')+'</span>'
+        +'<span class="bal-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+' '+esc(item.unit)+'</span>'
+        +'<span><span class="badge '+m.cls+'">'+m.lbl+'</span></span></div>';
+    });
+    h += '</div>';
+    var todHist = S.history.filter(function(e){ return new Date(e.ts).toDateString()===tod2; });
+    h += '<div class="section-label">Today\'s Movements</div>';
+    if(todHist.length) {
+      h += '<div class="hist-panel"><div class="hist-head"><span>All movements today</span><span style="font-size:9px">'+todHist.length+' records</span></div><div class="hist-scroll">';
+      todHist.forEach(function(e){
+        var isIn = e.type==='IN';
+        h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
+          +'<span class="hist-name">'+esc(e.itemName)+'</span>'
+          +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
+          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+          +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
+      });
+      h += '</div></div>';
+    } else {
+      h += '<div class="hist-panel"><div style="padding:28px;text-align:center;font-size:11px;color:var(--cream3)">No movements recorded today yet.</div></div>';
+    }
+  }
+
+  /* ── REPORTS ── */
+  if(S.view === 'report') {
+    var dr = defaultDateRange();
+    var rFrom = S.rptFrom || dr.from;
+    var rTo   = S.rptTo   || dr.to;
+    var rItem = S.rptItem || '';
+    var rCat  = S.rptCat  || 'All';
+
+    h += '<div class="section-label">Stock Reports — Daily Ledger & Period Summary</div>';
+
+    // Category filter chips
+    var rptCats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
+    h += '<div style="display:flex;gap:5px;flex-wrap:wrap;padding:10px 20px 0;">'
+      +'<span style="font-size:9px;color:var(--cream3);letter-spacing:0.1em;text-transform:uppercase;align-self:center;margin-right:4px;">Category:</span>'
+      +rptCats.map(function(c){ return '<button class="rpt-cat-chip'+(rCat===c?' on':'')+'" data-rptcat="'+esc(c)+'">'+esc(c)+'</button>'; }).join('')
+      +'</div>';
+
+    // Controls row — filter item list by chosen category
+    var rptItemsForCat = rCat === 'All' ? S.items : S.items.filter(function(i){ return i.category === rCat; });
+    h += '<div class="rpt-controls">'
+      +'<div class="rpt-ctrl-group"><label class="rpt-lbl">Product</label>'
+      +'<select class="inp rpt-sel" id="rptItemSel">'
+      +'<option value="">All in category</option>'
+      +rptItemsForCat.map(function(i){ return '<option value="'+i.id+'"'+(String(rItem)===String(i.id)?' selected':'')+'>'+esc(i.name)+'</option>'; }).join('')
+      +'</select></div>'
+      +'<div class="rpt-ctrl-group"><label class="rpt-lbl">From</label>'
+      +'<input type="date" class="inp rpt-date" id="rptFrom" value="'+esc(rFrom)+'"></div>'
+      +'<div class="rpt-ctrl-group"><label class="rpt-lbl">To</label>'
+      +'<input type="date" class="inp rpt-date" id="rptTo" value="'+esc(rTo)+'"></div>'
+      +'<div class="rpt-ctrl-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">'
+      +'<button class="btn-rpt-run" id="rptRunBtn">▶ Generate Report</button>'
+      +(S.rptRows&&S.rptRows.length?'<button class="btn-export" id="exportCsvBtn">📥 Export CSV</button>':'')
+      +'</div>'
+      +'</div>';
+
+    if(S.rptRows) {
+      var rows = S.rptRows;
+      var selectedItem = rItem ? S.items.find(function(i){ return String(i.id)===String(rItem); }) : null;
+      var productLabel = selectedItem ? selectedItem.name : 'All Products';
+      var unit = selectedItem ? selectedItem.unit : 'kg';
+
+      // Summary cards
+      var totIn=0, totOut=0, totWaste=0, totAdj=0;
+      rows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
+      var openBal  = rows.length ? rows[0].open  : 0;
+      var closeBal = rows.length ? rows[rows.length-1].close : 0;
+
+      h += '<div class="rpt-title-bar">'
+        +'<div><div class="rpt-product-name">'+esc(productLabel)+'</div>'
+        +'<div class="rpt-period">'+esc(rFrom)+' → '+esc(rTo)+'</div></div>'
+        +(S.teamUnlocked?'<button class="btn-copy-prov" id="copyRptBtn">📋 Copy Report</button>':'')
+        +'</div>';
+
+      h += '<div class="rpt-summary">'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--cream)">'+openBal.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Opening Stock</div></div>'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--green)">+'+totIn.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total IN</div></div>'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--red)">-'+totOut.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total OUT</div></div>'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--orange)">-'+totWaste.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total Waste</div></div>'
+        +(totAdj?'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--blue)">'+totAdj.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Adjustments</div></div>':'')
+        +'<div class="rpt-card rpt-card-close"><div class="rpt-card-val" style="color:var(--gold3)">'+closeBal.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Closing Stock</div></div>'
+        +'</div>';
+
+      if(!rows.length) {
+        h += '<div class="hist-panel" style="margin:0 20px 20px"><div style="padding:32px;text-align:center;color:var(--cream3);font-size:12px">No movements found for this period.</div></div>';
+      } else {
+        // Daily ledger table
+        h += '<div style="overflow-x:auto;margin:0 20px 20px">'
+          +'<div class="rpt-table">'
+          +'<div class="rpt-hdr">'
+          +'<span>Date</span><span>Opening</span><span>IN 📥</span><span>OUT 📤</span><span>Waste 🗑</span><span>Adj ✏️</span><span>Closing</span>'
+          +'</div>';
+        rows.forEach(function(r){
+          var d = new Date(r.date+'T12:00:00');
+          var dayLabel = d.toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'});
+          var netOk = r.close >= 0;
+          h += '<div class="rpt-row">'
+            +'<span class="rpt-date-cell">'+esc(dayLabel)+'</span>'
+            +'<span class="rpt-num">'+r.open.toLocaleString()+'</span>'
+            +'<span class="rpt-num" style="color:var(--green)">'+(r.in?'+'+r.in.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--red)">'+(r.out?'-'+r.out.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--orange)">'+(r.waste?'-'+r.waste.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--blue)">'+(r.adj?r.adj.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num rpt-close" style="color:'+(r.close<=0?'var(--red)':r.close<(selectedItem?selectedItem.threshold:50)?'var(--orange)':'var(--gold3)')+'">'+r.close.toLocaleString()+'</span>'
+            +'</div>';
+        });
+        h += '</div></div>';
+      }
+    } else {
+      h += '<div class="rpt-empty">Select a product and date range above, then click <strong>▶ Generate Report</strong></div>';
+    }
+  }
+
+  /* ── PROVISIONING ── */
+  if(S.view === 'provision') {
+    var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
+    var outItems  = needItems.filter(function(i){ return i.balance === 0; });
+    var lowItems  = needItems.filter(function(i){ return i.balance > 0; });
+    h += '<div class="section-label">Provisioning & Purchase Planner</div>';
+    h += '<div class="prov-wrap">';
+    h += '<div class="prov-summary">'
+      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--red)">'+outItems.length+'</div><div class="prov-stat-lbl">Out of Stock</div></div>'
+      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--orange)">'+lowItems.length+'</div><div class="prov-stat-lbl">Low Stock</div></div>'
+      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--gold2)">'+needItems.reduce(function(s,i){return s+(Math.max(i.threshold*2,i.threshold-i.balance+50));},0).toLocaleString()+'</div><div class="prov-stat-lbl">Total kg to Order</div></div>'
+      +(S.teamUnlocked?'<div style="display:flex;align-items:center;padding:0 4px"><button class="btn-copy-prov" id="copyProvBtn">📋 Copy Order List</button></div>':'')
+      +'</div>';
+    if(!needItems.length) {
+      h += '<div class="prov-table"><div class="prov-all-ok">✅ All coffee beans are well-stocked! Nothing to provision right now.</div></div>';
+    } else {
+      h += '<div style="overflow-x:auto"><div class="prov-table">'
+        +'<div class="prov-hdr"><span>Coffee Bean</span><span>Current</span><span>Min Level</span><span>Deficit</span><span>Suggested Order</span><span>Status</span></div>';
+      needItems.forEach(function(item){
+        var st = getStatus(item.balance,item.threshold), m = SM[st];
+        var deficit = Math.max(0, item.threshold - item.balance);
+        var suggested = Math.max(item.threshold * 2, deficit + item.threshold);
+        h += '<div class="prov-row">'
+          +'<span class="prov-name">'+esc(item.name)+'<div class="prov-note">'+esc(item.origin)+'</div></span>'
+          +'<span style="color:'+m.color+';font-weight:600">'+item.balance+' '+esc(item.unit)+'</span>'
+          +'<span style="color:var(--cream3)">'+item.threshold+' '+esc(item.unit)+'</span>'
+          +'<span style="color:var(--red)">'+deficit+' '+esc(item.unit)+'</span>'
+          +'<span class="prov-suggest">'+suggested+' '+esc(item.unit)+'</span>'
+          +'<span><span class="badge '+m.cls+'">'+m.lbl+'</span></span>'
+          +'</div>';
+      });
+      h += '</div></div>';
+    }
+    h += '</div>';
+  }
+
+  /* ── TEAM PANEL ── */
+  if(S.view === 'team' && S.teamUnlocked) {
+    h += '<div class="team-hdr"><span class="team-title">🔐 Stock Management Panel</span>'
+      +'<div class="team-btns">'
+      +'<button class="btn-clrhist" id="clearHistBtn">🗑 Clear History</button>'
+      +'<button class="btn-export" id="exportTeamBtn">📥 Export CSV</button>'
+      +'<button class="btn-pwd" id="toggleCatMgr">🗂 Categories</button>'
+      +'<button class="btn-pwd" id="toggleCPwd">🔑 Change Password</button>'
+      +'<button class="btn-add" id="addItemBtn">+ New Item</button>'
+      +'</div></div>';
+
+    // Category manager panel
+    if(S.showCatMgr) {
+      h += '<div class="cat-manager">'
+        +'<div class="cat-manager-hdr"><span>🗂 Category Manager</span><button class="btn-cancel" style="font-size:10px;padding:3px 10px" id="closeCatMgr">✕ Close</button></div>'
+        +'<div class="cat-tags-wrap">';
+      S.categories.forEach(function(c){
+        h += '<span class="cat-tag">'+esc(c)+'<button class="cat-del" data-catdel="'+esc(c)+'" title="Delete">×</button></span>';
+      });
+      h += '</div>'
+        +'<div class="cat-add-row">'
+        +'<input class="inp" id="newCatInp" placeholder="New category name…" value="'+esc(S.newCatName)+'" style="max-width:240px">'
+        +'<button class="btn-save" id="addCatBtn">+ Add</button>'
+        +'</div></div>';
+    }
+
+    // Filter bar
+    var tpCats2 = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
+    h += '<div class="team-filter-bar">'
+      +'<div class="fg"><label>Category</label>'
+      +'<select class="inp" id="tpFilterCat" style="font-size:11px;padding:5px 8px">'
+      +tpCats2.map(function(c){ return '<option'+(S.tpFilterCat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
+      +'</select></div>'
+      +'<div class="fg"><label>Status</label>'
+      +'<select class="inp" id="tpFilterStatus" style="font-size:11px;padding:5px 8px">'
+      +'<option'+(S.tpFilterStatus==='All'?' selected':'')+'>All</option>'
+      +'<option'+(S.tpFilterStatus==='IN STOCK'?' selected':'')+'>IN STOCK</option>'
+      +'<option'+(S.tpFilterStatus==='LOW STOCK'?' selected':'')+'>LOW STOCK</option>'
+      +'<option'+(S.tpFilterStatus==='OUT'?' selected':'')+'>OUT</option>'
+      +'</select></div>'
+      +'<div class="fg"><label>Search</label>'
+      +'<input class="inp" id="tpSearch" placeholder="Search items…" value="'+esc(S.tpFilterSearch)+'" style="font-size:11px;padding:5px 8px;width:150px"></div>'
+      +'<div class="fg" style="justify-content:flex-end"><label>&nbsp;</label>'
+      +'<div style="display:flex;gap:4px"><span style="font-size:9px;color:var(--cream3);align-self:center">SORT:</span>'
+      +'<button class="sort-btn'+(S.dashSort==='name'?' on':'')+'" data-tpsort="name">Name</button>'
+      +'<button class="sort-btn'+(S.dashSort==='stock'?' on':'')+'" data-tpsort="stock">Stock ↓</button>'
+      +'<button class="sort-btn'+(S.dashSort==='status'?' on':'')+'" data-tpsort="status">Status</button>'
+      +'</div></div>'
+      +'</div>';
+
+    if(S.showCPwd) {
+      h += '<div class="form-box gold"><div class="form-row">'
+        +'<div class="form-field"><label>Current Password</label><input type="password" class="inp" id="cpOld" value="'+esc(S.cpOld)+'" autocomplete="off"></div>'
+        +'<div class="form-field"><label>New Password</label><input type="password" class="inp" id="cpNew" value="'+esc(S.cpNew)+'" autocomplete="off"></div>'
+        +'<div class="form-field"><label>Confirm New</label><input type="password" class="inp" id="cpConf" value="'+esc(S.cpConf)+'" autocomplete="off"></div>'
+        +'</div>'+(S.cpErr?'<div class="err-txt">'+esc(S.cpErr)+'</div>':'')
+        +'<div class="form-btns"><button class="btn-save" id="cpSave">Save Password</button><button class="btn-cancel" id="cpCancel">Cancel</button></div></div>';
+    }
+
+    if(S.showAddItem && S.newItem) {
+      var ni = S.newItem;
+      h += '<div class="form-box green"><div style="font-size:11px;color:var(--green);font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">+ Add New Coffee Bean</div>'
+        +'<div class="form-row">'
+        +'<div class="form-field" style="flex:2 1 180px"><label>Bean Name</label><input class="inp ni-f" data-f="name" value="'+esc(ni.name)+'" placeholder="e.g. Rwanda Bourbon"></div>'
+        +'<div class="form-field"><label>Category</label>'
+        +'<select class="inp ni-f" data-f="category">'
+        +S.categories.map(function(c){ return '<option value="'+esc(c)+'"'+(ni.category===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
+        +'</select></div>'
+        +'<div class="form-field"><label>Origin</label><input class="inp ni-f" data-f="origin" value="'+esc(ni.origin)+'" placeholder="Rwanda 🇷🇼"></div>'
+        +'<div class="form-field" style="flex:0 1 90px"><label>Opening Stock</label><input type="number" class="inp ni-f" data-f="balance" value="'+esc(ni.balance)+'"></div>'
+        +'<div class="form-field" style="flex:0 1 70px"><label>Unit</label><input class="inp ni-f" data-f="unit" value="'+esc(ni.unit)+'"></div>'
+        +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ni-f" data-f="threshold" value="'+esc(ni.threshold)+'"></div>'
+        +'</div>'
+        +'<div class="form-btns"><button class="btn-save" id="niSave" '+(!(ni.name.trim()&&ni.category.trim())?'disabled style="opacity:0.4"':'')+'>Add Bean</button>'
+        +'<button class="btn-cancel" id="niCancel">Cancel</button></div></div>';
+    }
+
+    // Apply team panel filters
+    var tpItems = S.items.filter(function(item){
+      var stLbl  = SM[getStatus(item.balance,item.threshold)].lbl;
+      var catOk  = S.tpFilterCat === 'All' || item.category === S.tpFilterCat;
+      var statOk = S.tpFilterStatus === 'All' || stLbl === S.tpFilterStatus;
+      var srchOk = !S.tpFilterSearch || item.name.toLowerCase().includes(S.tpFilterSearch.toLowerCase());
+      return catOk && statOk && srchOk;
+    });
+    var sortOrd2 = {OK:2, LOW:1, OUT:0};
+    if(S.dashSort==='stock') tpItems.sort(function(a,b){ return b.balance - a.balance; });
+    else if(S.dashSort==='status') tpItems.sort(function(a,b){ return sortOrd2[getStatus(a.balance,a.threshold)] - sortOrd2[getStatus(b.balance,b.threshold)]; });
+    else tpItems.sort(function(a,b){ return a.name.localeCompare(b.name); });
+
+    var cols = '2.5fr 1.2fr 1fr 1fr 1fr 1.8fr';
+    h += '<div class="team-table-wrap"><div class="team-hdr-row" style="grid-template-columns:'+cols+'">'
+      +'<span>Bean</span><span style="text-align:right">Balance</span><span style="text-align:right">In Today</span><span style="text-align:right">Out Today</span><span style="text-align:center">Status</span><span style="text-align:center">Actions</span></div>';
+    tpItems.forEach(function(item){
+      var st = getStatus(item.balance, item.threshold), m = SM[st];
+      var tIn2 = todayMoves(item.id,'IN'), tOut2 = todayMoves(item.id,'OUT');
+      var isEditing = S.editBalId === item.id;
+      h += '<div class="team-item-row" style="grid-template-columns:'+cols+'">'
+        +'<span class="ti-name">'+esc(item.name)+'<br>'
+        +'<span style="font-size:9px;color:var(--blue);font-weight:500">'+esc(item.category)+'</span>'
+        +' <span style="font-size:9px;color:var(--cream3);font-weight:400">'+esc(item.origin)+'</span></span>'
+        +(isEditing
+          ? '<span style="text-align:right;display:flex;gap:4px;justify-content:flex-end;align-items:center">'
+            +'<input type="number" class="bal-edit-inp" id="balEditInp_'+item.id+'" value="'+S.editBalVal+'" min="0" step="0.1">'
+            +'<button class="btn-save-bal" data-savebal="'+item.id+'">✓</button>'
+            +'<button class="btn-cancel" style="padding:3px 6px;font-size:10px" data-cancelbal="'+item.id+'">✕</button></span>'
+          : '<span style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:'+m.color+';font-weight:600;display:flex;align-items:center;justify-content:flex-end;gap:5px">'
+            +item.balance+' '+esc(item.unit)
+            +'<button class="btn-edit-bal" data-editbal="'+item.id+'" data-editbalval="'+item.balance+'" title="Edit balance">✏️</button></span>'
+        )
+        +'<span style="text-align:right;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+(tIn2?'+'+tIn2:'—')+'</span>'
+        +'<span style="text-align:right;color:var(--red);font-family:\'JetBrains Mono\',monospace">'+(tOut2?'-'+tOut2:'—')+'</span>'
+        +'<span style="text-align:center"><span class="badge '+m.cls+'">'+m.lbl+'</span></span>'
+        +'<span style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">'
+        +'<button class="btn-log-in" data-logid="'+item.id+'" data-logtype="IN">📥 IN</button>'
+        +'<button class="btn-log-out" data-logid="'+item.id+'" data-logtype="OUT">📤 OUT</button>'
+        +'<button class="btn-del" data-delid="'+item.id+'" title="Delete">🗑</button>'
+        +'</span></div>';
+    });
+    h += '<div class="section-label">Movement History <span style="font-size:9px;color:var(--cream3);font-weight:400;letter-spacing:0;text-transform:none;margin-left:6px">Delete individual entries or clear all history below</span></div>';
+    if(!S.history.length) {
+      h += '<div class="hist-panel" style="margin:0 20px 16px"><div style="padding:28px;text-align:center;font-size:11px;color:var(--cream3)">No movement history yet.</div></div>';
+    } else {
+      // Group entries by date
+      var grouped = {};
+      var groupOrder = [];
+      S.history.forEach(function(e){
+        var day = new Date(e.ts).toDateString();
+        if(!grouped[day]){ grouped[day]=[]; groupOrder.push(day); }
+        grouped[day].push(e);
+      });
+      h += '<div class="hist-panel" style="margin:0 20px 16px"><div class="hist-head"><span>All Movements ('+S.history.length+' total)</span><span style="font-size:9px;color:var(--red)">🗑 = delete that entry permanently</span></div><div class="hist-scroll" style="max-height:340px">';
+      groupOrder.forEach(function(day){
+        var isToday = day === new Date().toDateString();
+        var isYest  = day === new Date(Date.now()-86400000).toDateString();
+        var dayLabel = isToday ? 'Today' : isYest ? 'Yesterday' : new Date(day).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+        h += '<div style="padding:5px 16px;background:var(--bg2);font-size:9px;color:var(--gold2);font-weight:700;letter-spacing:0.14em;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
+          +'<span>'+dayLabel+'</span>'
+          +'<button class="btn-del-day" data-day="'+esc(day)+'" style="font-size:9px;background:rgba(224,82,82,0.08);border:1px solid var(--red-bd);color:var(--red);padding:2px 8px;border-radius:4px;font-weight:700">🗑 Delete '+dayLabel+'</button>'
+          +'</div>';
+        grouped[day].forEach(function(e){
+          var isIn = e.type==='IN';
+          var entryComments = S.comments[String(e.id)] || [];
+          var showComments = S.openCommentId === e.id;
+          h += '<div style="border-bottom:1px solid var(--border)">'
+            +'<div class="hist-row" style="border-bottom:none">'
+            +'<span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
+            +'<span class="hist-name">'+esc(e.itemName)+'</span>'
+            +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
+            +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+            +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'<span></span>')
+            +'<div style="display:flex;gap:4px;flex-shrink:0">'
+            +'<button class="comment-badge" data-opencomment="'+esc(e.id)+'" title="Comments">💬'+(entryComments.length?' '+entryComments.length:'')+'</button>'
+            +'<button class="btn-reverse" data-revid="'+esc(e.id)+'" title="Reverse balance">↩</button>'
+            +'<button class="btn-del-entry" data-entryid="'+esc(e.id)+'" title="Delete this entry">🗑</button>'
+            +'</div>'
+            +'</div>'
+            +(showComments
+              ? '<div class="comment-list">'
+                +(entryComments.length
+                  ? entryComments.map(function(c,ci){
+                      return '<div class="comment-item">'+esc(c.text)
+                        +'<div class="comment-meta">'+new Date(c.ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
+                        +' · '+esc(c.user)
+                        +' <button style="font-size:9px;color:var(--red);background:none;border:none;cursor:pointer" data-delcomment="'+esc(e.id)+'" data-commentidx="'+ci+'">delete</button></div>'
+                        +'</div>';
+                    }).join('')
+                  : '<div style="font-size:10px;color:var(--cream3);padding:4px 0">No comments yet.</div>'
+                )
+                +'</div>'
+                +'<div class="comment-inp-row">'
+                +'<input class="comment-inp" id="commentInp_'+esc(e.id)+'" placeholder="Add a comment…">'
+                +'<button class="btn-comment-send" data-sendcomment="'+esc(e.id)+'">Send</button>'
+                +'</div>'
+              : ''
+            )
+            +'</div>';
+        });
+      });
+      h += '</div></div>';
+    }
+    h += '<div style="height:1px"></div>'; // spacer
+  }
+
+  h += '<div id="footer">Windmill Cafe & Roastery · Firebase Realtime Sync · Auto-updates pushed live</div>';
+  if(S.toast) h += '<div id="toast">'+esc(S.toast)+'</div>';
+
+  app.innerHTML = h;
+  bindEvents();
+}
+
+/* ══════════════════════════════════════════════════════
+   BIND EVENTS
+══════════════════════════════════════════════════════ */
+function bindEvents() {
+  function g(id) { return document.getElementById(id); }
+
+  var nd=g('navDash'); if(nd) nd.onclick=function(){ S.view='dashboard'; render(); };
+  var nb=g('navBal');  if(nb) nb.onclick=function(){ S.view='balance'; render(); };
+  var nr=g('navRpt');  if(nr) nr.onclick=function(){ S.view='report'; if(!S.rptFrom){ var dr=defaultDateRange(); S.rptFrom=dr.from; S.rptTo=dr.to; } render(); };
+  var np=g('navProv'); if(np) np.onclick=function(){ S.view='provision'; render(); };
+  var nt=g('navTeam'); if(nt) nt.onclick=function(){
+    if(S.teamUnlocked){ S.view='team'; render(); }
+    else { S.showLogin=true; render(); setTimeout(function(){ var e=g('loginInput'); if(e)e.focus(); },60); }
+  };
+  var lb=g('lockBtn');  if(lb) lb.onclick=doLock;
+  var ll=g('lockLink'); if(ll) ll.onclick=doLock;
+  var rb=g('refreshBtn'); if(rb) rb.onclick=function(){ fbRef.once('value',function(snap){ if(snap.val()) applyRemoteData(snap.val(),true); }); };
+
+  document.querySelectorAll('[data-filter]').forEach(function(b){
+    b.onclick=function(){ S.filter=this.getAttribute('data-filter'); render(); };
+  });
+  var si=g('searchInput'); if(si) si.oninput=function(){ S.search=this.value; render(); };
+
+  /* Login */
+  var li=g('loginInput');
+  if(li){ li.oninput=function(){ S.loginErr=false; }; li.onkeydown=function(e){ if(e.key==='Enter') doLogin(); }; }
+  var lbtn=g('loginBtn');   if(lbtn) lbtn.onclick=doLogin;
+  var lc=g('loginClose');   if(lc)   lc.onclick=function(){ S.showLogin=false; S.loginErr=false; render(); };
+  var ov=g('overlay'); if(ov) ov.onclick=function(e){ if(e.target===ov){ S.showLogin=false; S.logModal=null; S.loginErr=false; render(); } };
+
+  /* Log modal */
+  var ti=g('typeIn');    if(ti) ti.onclick=function(){ S.logType='IN';    render(); };
+  var to=g('typeOut');   if(to) to.onclick=function(){ S.logType='OUT';   render(); };
+  var tw=g('typeWaste'); if(tw) tw.onclick=function(){ S.logType='WASTE'; render(); };
+  var ta=g('typeAdj');   if(ta) ta.onclick=function(){ S.logType='ADJ';   render(); };
+  var lqi=g('logQtyInput');  if(lqi) lqi.oninput=function(){ S.logQty=this.value; };
+  var lni=g('logNoteInput'); if(lni) lni.oninput=function(){ S.logNote=this.value; };
+  var lsb=g('logSaveBtn');
+  if(lsb) lsb.onclick=function(){
+    var qel=g('logQtyInput'), nel=g('logNoteInput');
+    var qty=qel?parseFloat(qel.value):parseFloat(S.logQty);
+    var note=nel?nel.value:S.logNote;
+    if(!qty||qty<=0){ S.logErr='Please enter a valid quantity.'; render(); return; }
+    var item=S.items.find(function(i){ return i.id===S.logModal; });
+    if(S.logType==='OUT'&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
+    logMovement(S.logModal,S.logType,qty,note);
+  };
+  var lcb=g('logCancelBtn'); if(lcb) lcb.onclick=function(){ S.logModal=null; S.logQty=''; S.logNote=''; S.logErr=''; render(); };
+
+  document.querySelectorAll('[data-logid]').forEach(function(b){
+    b.onclick=function(){
+      S.logModal=Number(this.getAttribute('data-logid'));
+      S.logType=this.getAttribute('data-logtype');
+      S.logQty=''; S.logNote=''; S.logErr='';
+      render();
+      setTimeout(function(){ var e=g('logQtyInput'); if(e)e.focus(); },60);
+    };
+  });
+  document.querySelectorAll('[data-delid]').forEach(function(b){
+    b.onclick=function(){ deleteItem(Number(this.getAttribute('data-delid'))); };
+  });
+
+  var tp=g('toggleCPwd'); if(tp) tp.onclick=function(){ S.showCPwd=!S.showCPwd; render(); };
+  var co=g('cpOld'); if(co) co.oninput=function(){ S.cpOld=this.value; };
+  var cn=g('cpNew'); if(cn) cn.oninput=function(){ S.cpNew=this.value; };
+  var cc=g('cpConf'); if(cc) cc.oninput=function(){ S.cpConf=this.value; };
+  var cs=g('cpSave');
+  if(cs) cs.onclick=function(){
+    if(S.cpOld!==S.password){ S.cpErr='Current password is incorrect.'; render(); return; }
+    if(S.cpNew.length<6){ S.cpErr='New password must be at least 6 characters.'; render(); return; }
+    if(S.cpNew!==S.cpConf){ S.cpErr='Passwords do not match.'; render(); return; }
+    changePwd(S.cpNew);
+  };
+  var ccan=g('cpCancel'); if(ccan) ccan.onclick=function(){ S.showCPwd=false; S.cpOld=S.cpNew=S.cpConf=S.cpErr=''; render(); };
+
+  var aib=g('addItemBtn'); if(aib) aib.onclick=function(){
+    S.showAddItem=true; S.newItem={name:'',category:'Single Origin',origin:'',unit:'kg',balance:0,threshold:30}; render();
+  };
+  document.querySelectorAll('.ni-f').forEach(function(inp){
+    var ev = inp.tagName==='SELECT' ? 'change' : 'input';
+    inp.addEventListener(ev, function(){
+      var f=this.getAttribute('data-f');
+      S.newItem[f]=(f==='balance'||f==='threshold')?Number(this.value):this.value;
+      var sb=g('niSave'); if(sb){ var ok=S.newItem.name.trim()&&S.newItem.category.trim(); sb.disabled=!ok; sb.style.opacity=ok?'1':'0.4'; }
+    });
+  });
+  var nis=g('niSave'); if(nis) nis.onclick=function(){ if(S.newItem&&S.newItem.name.trim()&&S.newItem.category.trim()) addItem(S.newItem); };
+  var nic=g('niCancel'); if(nic) nic.onclick=function(){ S.showAddItem=false; S.newItem=null; render(); };
+
+  /* Reverse entry */
+  document.querySelectorAll('[data-revid]').forEach(function(b){
+    b.onclick=function(){ reverseEntry(this.getAttribute('data-revid')); };
+  });
+
+  /* Delete single history entry */
+  document.querySelectorAll('[data-entryid]').forEach(function(b){
+    b.onclick=function(){ deleteHistoryEntry(this.getAttribute('data-entryid')); };
+  });
+
+  /* Delete a whole day's entries */
+  document.querySelectorAll('[data-day]').forEach(function(b){
+    b.onclick=function(){ deleteHistoryDay(this.getAttribute('data-day')); };
+  });
+
+  /* Clear ALL history */
+  var chb=g('clearHistBtn'); if(chb) chb.onclick=clearAllHistory;
+
+  /* Dashboard sort */
+  document.querySelectorAll('[data-dsort]').forEach(function(b){
+    b.onclick=function(){ S.dashSort=this.getAttribute('data-dsort'); render(); };
+  });
+  /* Team panel sort */
+  document.querySelectorAll('[data-tpsort]').forEach(function(b){
+    b.onclick=function(){ S.dashSort=this.getAttribute('data-tpsort'); render(); };
+  });
+
+  /* Team panel filters */
+  var tfc=g('tpFilterCat');    if(tfc)    tfc.onchange=function(){ S.tpFilterCat=this.value; render(); };
+  var tfs=g('tpFilterStatus'); if(tfs)    tfs.onchange=function(){ S.tpFilterStatus=this.value; render(); };
+  var tfs2=g('tpSearch');      if(tfs2)   tfs2.oninput=function(){ S.tpFilterSearch=this.value; render(); };
+
+  /* Category manager */
+  var tcm=g('toggleCatMgr');   if(tcm) tcm.onclick=function(){ S.showCatMgr=!S.showCatMgr; render(); };
+  var ccm=g('closeCatMgr');    if(ccm) ccm.onclick=function(){ S.showCatMgr=false; render(); };
+  var nci=g('newCatInp');      if(nci) nci.oninput=function(){ S.newCatName=this.value; };
+  if(nci) nci.onkeydown=function(e){ if(e.key==='Enter'){ addCategory(S.newCatName); } };
+  var acb=g('addCatBtn');      if(acb) acb.onclick=function(){ addCategory(S.newCatName); };
+  document.querySelectorAll('[data-catdel]').forEach(function(b){
+    b.onclick=function(){ deleteCategory(this.getAttribute('data-catdel')); };
+  });
+
+  /* Inline balance edit */
+  document.querySelectorAll('[data-editbal]').forEach(function(b){
+    b.onclick=function(){
+      S.editBalId=Number(this.getAttribute('data-editbal'));
+      S.editBalVal=this.getAttribute('data-editbalval');
+      render();
+      setTimeout(function(){ var ei=document.getElementById('balEditInp_'+S.editBalId); if(ei){ ei.focus(); ei.select(); } },60);
+    };
+  });
+  document.querySelectorAll('[data-savebal]').forEach(function(b){
+    b.onclick=function(){
+      var id=Number(this.getAttribute('data-savebal'));
+      var inp=document.getElementById('balEditInp_'+id);
+      saveEditedBalance(id, inp?inp.value:S.editBalVal);
+    };
+  });
+  document.querySelectorAll('[data-cancelbal]').forEach(function(b){
+    b.onclick=function(){ S.editBalId=null; S.editBalVal=''; render(); };
+  });
+  // Enter key on balance edit input
+  document.querySelectorAll('.bal-edit-inp').forEach(function(inp){
+    inp.onkeydown=function(e){
+      if(e.key==='Enter'){
+        var id=Number(this.id.replace('balEditInp_',''));
+        saveEditedBalance(id,this.value);
+      }
+      if(e.key==='Escape'){ S.editBalId=null; S.editBalVal=''; render(); }
+    };
+    inp.oninput=function(){ S.editBalVal=this.value; };
+  });
+
+  /* Export team CSV */
+  var etb=g('exportTeamBtn'); if(etb) etb.onclick=function(){
+    var lines=['Bean,Category,Balance,Unit,Status,In Today,Out Today'];
+    S.items.forEach(function(item){
+      var st=SM[getStatus(item.balance,item.threshold)].lbl;
+      var tI=todayMoves(item.id,'IN'), tO=todayMoves(item.id,'OUT');
+      lines.push([item.name,item.category,item.balance,item.unit,st,tI,tO].join(','));
+    });
+    var blob=new Blob([lines.join('\n')],{type:'text/csv'});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a');
+    a.href=url; a.download='windmill-stock-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
+    URL.revokeObjectURL(url); showToast('📥 CSV exported!');
+  };
+
+  /* Comments */
+  document.querySelectorAll('[data-opencomment]').forEach(function(b){
+    b.onclick=function(){
+      var id=Number(this.getAttribute('data-opencomment'));
+      S.openCommentId = S.openCommentId===id ? null : id;
+      render();
+    };
+  });
+  document.querySelectorAll('[data-sendcomment]').forEach(function(b){
+    b.onclick=function(){
+      var id=this.getAttribute('data-sendcomment');
+      var inp=document.getElementById('commentInp_'+id);
+      if(inp&&inp.value.trim()) addComment(id,inp.value);
+    };
+  });
+  document.querySelectorAll('[data-delcomment]').forEach(function(b){
+    b.onclick=function(){
+      var id=this.getAttribute('data-delcomment');
+      var idx=parseInt(this.getAttribute('data-commentidx'));
+      deleteComment(id,idx);
+    };
+  });
+  document.querySelectorAll('.comment-inp').forEach(function(inp){
+    inp.onkeydown=function(e){
+      if(e.key==='Enter'){
+        var id=this.id.replace('commentInp_','');
+        if(this.value.trim()) addComment(id,this.value);
+      }
+    };
+  });
+
+  /* Reports */
+  var rsel=g('rptItemSel'); if(rsel) rsel.onchange=function(){ S.rptItem=this.value; };
+  var rfr=g('rptFrom');     if(rfr)  rfr.onchange=function(){ S.rptFrom=this.value; };
+  var rto=g('rptTo');       if(rto)  rto.onchange=function(){ S.rptTo=this.value; };
+  var rrn=g('rptRunBtn');
+  if(rrn) rrn.onclick=function(){
+    var dr=defaultDateRange();
+    var from = new Date((S.rptFrom||dr.from)+'T00:00:00');
+    var to   = new Date((S.rptTo  ||dr.to  )+'T23:59:59');
+    // Filter items by chosen category
+    var catItems = S.rptCat==='All' ? null : S.items.filter(function(i){ return i.category===S.rptCat; }).map(function(i){ return i.id; });
+    var itemId = S.rptItem ? S.rptItem : null;
+    if(!itemId && catItems) {
+      // Build combined ledger for category
+      S.rptRows = buildCategoryLedger(catItems, from, to);
+    } else {
+      S.rptRows = buildDailyLedger(itemId||null, from, to);
+    }
+    render();
+  };
+  // Report category chips
+  document.querySelectorAll('[data-rptcat]').forEach(function(b){
+    b.onclick=function(){ S.rptCat=this.getAttribute('data-rptcat'); S.rptItem=''; S.rptRows=null; render(); };
+  });
+  // Export CSV
+  var ecb=g('exportCsvBtn'); if(ecb) ecb.onclick=exportCSV;
+  var cpr=g('copyRptBtn');
+  if(cpr) cpr.onclick=function(){
+    if(!S.rptRows||!S.rptRows.length){ showToast('No data to copy.'); return; }
+    var selectedItem = S.rptItem ? S.items.find(function(i){ return String(i.id)===String(S.rptItem); }) : null;
+    var lines=['Windmill Cafe & Roastery — Stock Report',
+      (selectedItem?selectedItem.name:'All Products')+' | '+(S.rptFrom||'')+' → '+(S.rptTo||''),
+      '','Date          | Opening | IN      | OUT     | Waste   | Adj     | Closing',
+      '------------- | ------- | ------- | ------- | ------- | ------- | -------'];
+    S.rptRows.forEach(function(r){
+      function pad(n,w){ var s=String(n); while(s.length<w) s=' '+s; return s; }
+      var d=new Date(r.date+'T12:00:00');
+      var dl=d.toLocaleDateString([],{day:'2-digit',month:'short',year:'numeric'});
+      lines.push(dl.padEnd(13)+' | '+pad(r.open,7)+' | '+pad(r.in,7)+' | '+pad(r.out,7)+' | '+pad(r.waste,7)+' | '+pad(r.adj,7)+' | '+pad(r.close,7));
+    });
+    var totIn=0,totOut=0,totWaste=0,totAdj=0;
+    S.rptRows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
+    lines.push('','SUMMARY','Total IN: '+totIn+' | Total OUT: '+totOut+' | Total Waste: '+totWaste+' | Opening: '+S.rptRows[0].open+' | Closing: '+S.rptRows[S.rptRows.length-1].close);
+    navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Report copied to clipboard!'); });
+  };
+  var cpb=g('copyProvBtn'); if(cpb) cpb.onclick=function(){
+    var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
+    var lines = ['Windmill Cafe & Roastery — Purchase Order', new Date().toLocaleDateString(), ''];
+    needItems.forEach(function(item){
+      var deficit = Math.max(0, item.threshold - item.balance);
+      var suggested = Math.max(item.threshold*2, deficit+item.threshold);
+      lines.push(item.name+' ('+item.origin+'): '+suggested+' '+item.unit+' — current stock: '+item.balance+' '+item.unit);
+    });
+    navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Order list copied to clipboard!'); });
+  };
+}
+
+/* ══════════════════════════════════════════════════════
+   BOOT — called after Firebase connects
+══════════════════════════════════════════════════════ */
+function bootApp() {
+  S.syncing = true;
+
+  fbRef.once('value', function(snap) {
+    var data = snap.val() || {};
+    if(!data.items) {
+      /* First time: seed defaults. Save as object with keys so Firebase keeps structure */
+      fbRef.set({ items: DEFAULTS, password: 'windmill2024' });
+      S.items = DEFAULTS; S.history = []; S.password = 'windmill2024';
+    } else {
+      S.items    = data.items   ? objToArr(data.items)   : DEFAULTS;
+      S.history  = data.history ? objToArr(data.history) : [];
+      S.password = data.password || 'windmill2024';
+    }
+    S.syncing = false;
+    S.lastSync = new Date();
+    render();
+
+    /* Set up real-time listener.
+       _ignoreRemote = true for 1 second to block the immediate
+       echo-back that fires as soon as .on() is registered. */
+    _ignoreRemote = true;
+    setTimeout(function() { _ignoreRemote = false; }, 1000);
+
+    fbRef.on('value', function(snap) {
+      var d = snap.val();
+      if(!d) return;
+      applyRemoteData(d, true);
+    });
+  });
+}
+</script>
+</body>
+</html>
