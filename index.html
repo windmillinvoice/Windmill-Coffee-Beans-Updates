@@ -325,6 +325,20 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .match-fuzzy{color:var(--orange);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
 .match-none{color:var(--red);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
 
+/* ═══ MANUAL ALERT PANEL ═══════════════════════════════════════════ */
+.manual-alert-panel{margin:12px 20px 0;background:var(--surf);border:1px solid rgba(200,146,60,0.35);border-radius:10px;padding:12px 16px;animation:fadein 0.3s ease;}
+.manual-alert-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.manual-alert-icon{font-size:15px;}
+.manual-alert-title{font-size:10px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:var(--gold2);}
+.manual-alert-body{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.manual-alert-inp{flex:1 1 200px;background:var(--bg2);border:1px solid var(--border2);border-radius:7px;color:var(--cream);font-size:11px;padding:8px 12px;outline:none;font-family:'Barlow Condensed',sans-serif;transition:border .15s;min-width:0;}
+.manual-alert-inp:focus{border-color:var(--gold);}
+.manual-alert-inp::placeholder{color:var(--cream3);opacity:.7;}
+.manual-alert-btn{background:rgba(200,146,60,.14);border:1px solid rgba(200,146,60,.5);border-radius:7px;color:var(--gold3);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:.08em;padding:8px 18px;white-space:nowrap;transition:background .15s,transform .1s;}
+.manual-alert-btn:hover{background:rgba(200,146,60,.26);}
+.manual-alert-btn:active{transform:scale(0.97);}
+/* ════════════════════════════════════════════════════════════════════ */
+
 </style>
 </head>
 <body>
@@ -392,6 +406,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 var fbDB = null;
 var fbRef = null;
 var trRef = null;  // transfer_requests Firebase ref
+var alertsRef = null; // stock_alerts Firebase ref
 
 function initFirebaseAndBoot() {
   try {
@@ -405,9 +420,10 @@ function initFirebaseAndBoot() {
           projectId:     'windmill-beans',
           storageBucket: 'windmill-beans.appspot.com'
         });
-    fbDB  = firebase.database(existing);
-    fbRef = fbDB.ref('windmill-stock');
-    trRef = fbDB.ref('transfer_requests');
+    fbDB      = firebase.database(existing);
+    fbRef     = fbDB.ref('windmill-stock');
+    trRef     = fbDB.ref('transfer_requests');
+    alertsRef = fbDB.ref('stock_alerts');
     bootApp();
   } catch(e) {
     console.error('Firebase init failed:', e);
@@ -440,9 +456,10 @@ document.getElementById('setupConnectBtn').onclick = function() {
       projectId: projectid,
       storageBucket: projectid + '.appspot.com'
     });
-    fbDB  = firebase.database(app);
-    fbRef = fbDB.ref('windmill-stock');
-    trRef = fbDB.ref('transfer_requests');
+    fbDB      = firebase.database(app);
+    fbRef     = fbDB.ref('windmill-stock');
+    trRef     = fbDB.ref('transfer_requests');
+    alertsRef = fbDB.ref('stock_alerts');
 
     // Test connection with a quick read
     fbRef.child('_ping').set(Date.now()).then(function() {
@@ -684,6 +701,105 @@ function saveAll() {
 }
 function savePassword(p) { fbRef.child('password').set(p); }
 
+/* ══════════════════════════════════════════════════════
+   STOCK ALERT SYSTEM
+   ─────────────────────────────────────────────────────
+   sendStockAlert()    — core Firebase writer
+   sendManualAlert()   — called by the 📡 Send button
+   scanAndSendAlerts() — scans ALL items automatically;
+                         called on boot AND every sync.
+   De-duplication: localStorage tracks last-alerted
+   status per item so the same alert isn't re-sent
+   within 1 hour even across page refreshes.
+══════════════════════════════════════════════════════ */
+
+/* ── De-dup tracker (persisted in localStorage) ──────── */
+var _alertedItems = {}; // { "itemId": { status, ts } }
+
+function _loadAlertedItems() {
+  try {
+    var s = localStorage.getItem('wc-alerted-items');
+    if (s) _alertedItems = JSON.parse(s);
+  } catch(e) { _alertedItems = {}; }
+}
+
+function _saveAlertedItem(itemId, status) {
+  _alertedItems[String(itemId)] = { status: status, ts: new Date().toISOString() };
+  try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
+}
+
+function _shouldAlert(itemId, status) {
+  var prev = _alertedItems[String(itemId)];
+  if (!prev) return true;                               // never alerted → alert
+  if (prev.status !== status) return true;              // escalated (LOW → OUT) → alert
+  var elapsed = Date.now() - new Date(prev.ts).getTime();
+  return elapsed > 60 * 60 * 1000;                     // same status, >1 hr ago → re-alert
+}
+
+/* ── Core writer ─────────────────────────────────────── */
+function sendStockAlert(payload) {
+  if (!alertsRef) return;
+  alertsRef.push(
+    Object.assign({}, payload, {
+      ts:     new Date().toISOString(),
+      read:   false,
+      source: 'Store Dashboard'
+    })
+  ).catch(function(err) {
+    console.error('[Windmill] Alert write failed:', err);
+  });
+}
+
+/* ── Auto-scanner — runs on boot AND every Firebase sync ─
+   Checks every item. Sends an alert for any that are LOW
+   or OUT, skipping items already alerted for the same
+   status within the past hour.                          */
+function scanAndSendAlerts() {
+  if (!alertsRef || !S.items || !S.items.length) return;
+  S.items.forEach(function(item) {
+    var status = getStatus(item.balance, item.threshold);
+
+    if (status === 'OK') {
+      // Item recovered — clear its tracker so next dip re-alerts
+      delete _alertedItems[String(item.id)];
+      return;
+    }
+
+    if (!_shouldAlert(item.id, status)) return;  // already alerted recently
+
+    if (status === 'OUT') {
+      sendStockAlert({
+        type: 'auto_out', status: 'OUT',
+        itemId: item.id, itemName: item.name,
+        balance: item.balance, threshold: item.threshold, unit: item.unit,
+        message: '🚨 OUT OF STOCK: ' + item.name +
+                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+      });
+    } else {
+      sendStockAlert({
+        type: 'auto_low', status: 'LOW',
+        itemId: item.id, itemName: item.name,
+        balance: item.balance, threshold: item.threshold, unit: item.unit,
+        message: '⚠️ LOW STOCK: ' + item.name + ' is at ' + item.balance +
+                 ' ' + item.unit + ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
+      });
+    }
+    _saveAlertedItem(item.id, status);
+  });
+}
+
+/* ── Manual alert ────────────────────────────────────── */
+function sendManualAlert() {
+  var inp = document.getElementById('manualAlertInput');
+  if (!inp) return;
+  var msg = inp.value.trim();
+  if (!msg) { showToast('⚠️ Please type a message first.'); return; }
+  if (!alertsRef) { showToast('⚠️ Firebase not ready yet.'); return; }
+  sendStockAlert({ type: 'manual', message: '📢 ' + msg });
+  inp.value = '';
+  showToast('📨 Alert sent to Roastery!');
+}
+
 function applyRemoteData(data, flash) {
   /* Skip echo-backs from our own writes */
   if(_ignoreRemote) return;
@@ -707,6 +823,8 @@ function applyRemoteData(data, flash) {
       }
     }
     S.items = items;
+    // Auto-scan for LOW/OUT items every time remote data arrives
+    setTimeout(scanAndSendAlerts, 400);
   }
   S.history = history;
   S.password = password;
@@ -858,8 +976,12 @@ function doLock() { S.teamUnlocked = false; S.view = 'dashboard'; S.logModal = n
 function logMovement(itemId, type, qty, note) {
   var item = S.items.find(function(i){ return i.id === itemId; });
   if(!item) return;
-  // IN = add; OUT / WASTE / ADJ = subtract
+
+  var prevBal = item.balance; // capture BEFORE the change
+
+  // IN = add; OUT / WASTE / ADJ = subtract (floor at 0)
   var newBal = type === 'IN' ? item.balance + qty : Math.max(0, item.balance - qty);
+
   S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:newBal}) : i; });
   S.history = [{
     id: Date.now(), ts: new Date().toISOString(),
@@ -868,6 +990,43 @@ function logMovement(itemId, type, qty, note) {
   }].concat(S.history).slice(0, 500);
   S.logModal = null; S.logQty = ''; S.logNote = ''; S.logErr = '';
   saveAll();
+
+  // ── FEATURE 1: AUTOMATED STOCK ALERT ──────────────────────────────
+  // Fires only when stock first crosses below threshold or first hits zero.
+  // Does NOT fire repeatedly for every OUT while already low.
+  if (type !== 'IN' && alertsRef) {
+    var wasAboveThreshold = prevBal >= item.threshold;
+    var wasAboveZero      = prevBal > 0;
+    var isNowOut          = newBal === 0;
+    var isNowLow          = newBal > 0 && newBal < item.threshold;
+
+    if (isNowOut && wasAboveZero) {
+      sendStockAlert({
+        type: 'auto_out', status: 'OUT',
+        itemId: itemId, itemName: item.name,
+        balance: newBal, threshold: item.threshold, unit: item.unit,
+        message: '🚨 OUT OF STOCK: ' + item.name +
+                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+      });
+      _saveAlertedItem(itemId, 'OUT');
+    } else if (isNowLow && wasAboveThreshold) {
+      sendStockAlert({
+        type: 'auto_low', status: 'LOW',
+        itemId: itemId, itemName: item.name,
+        balance: newBal, threshold: item.threshold, unit: item.unit,
+        message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
+                 newBal + ' ' + item.unit +
+                 ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
+      });
+      _saveAlertedItem(itemId, 'LOW');
+    } else if (type === 'IN' && newBal >= item.threshold) {
+      // Stock restored above threshold — clear dedup so next dip re-alerts
+      delete _alertedItems[String(itemId)];
+      try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
+    }
+  }
+  // ── END AUTOMATED STOCK ALERT ─────────────────────────────────────
+
   var icons = {IN:'📥',OUT:'📤',WASTE:'🗑',ADJ:'✏️'};
   showToast((icons[type]||'•')+' '+qty+' '+item.unit+' logged as '+type+' for '+item.name);
   render();
@@ -1236,6 +1395,19 @@ function render() {
     +(S.teamUnlocked
       ? '🟢 <strong style="color:var(--green)">Team panel active.</strong> Changes sync to all devices instantly. <span style="color:var(--orange);text-decoration:underline;cursor:pointer" id="lockLink">Lock when finished →</span>'
       : '👁 <strong>Management view</strong> — read-only live data. Updates push to this screen in real time. Your stock team uses 🔒 Team Panel to update stock.')
+    +'</div>';
+
+  /* ── FEATURE 2: MANUAL ALERT PANEL ── */
+  h += '<div class="manual-alert-panel">'
+    +'<div class="manual-alert-header">'
+    +'<span class="manual-alert-icon">📡</span>'
+    +'<span class="manual-alert-title">Send Alert to Roastery</span>'
+    +'</div>'
+    +'<div class="manual-alert-body">'
+    +'<input id="manualAlertInput" class="manual-alert-inp" type="text" '
+    +'placeholder="e.g. Running low on House Blend — please roast more…" maxlength="280"/>'
+    +'<button class="manual-alert-btn" onclick="sendManualAlert()">Send ›</button>'
+    +'</div>'
     +'</div>';
 
   /* ── DASHBOARD ── */
@@ -1932,6 +2104,7 @@ function bindEvents() {
 ══════════════════════════════════════════════════════ */
 function bootApp() {
   S.syncing = true;
+  _loadAlertedItems(); // restore de-dup tracker from localStorage
 
   fbRef.once('value', function(snap) {
     var data = snap.val() || {};
@@ -1947,6 +2120,9 @@ function bootApp() {
     S.syncing = false;
     S.lastSync = new Date();
     render();
+
+    // Scan all items on first load — send alerts for anything already LOW or OUT
+    setTimeout(scanAndSendAlerts, 1500);
 
     /* Set up real-time listener.
        _ignoreRemote = true for 1 second to block the immediate
