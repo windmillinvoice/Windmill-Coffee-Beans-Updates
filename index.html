@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Windmill Cafe & Roastery — Live Stock Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -292,6 +294,37 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--surf2);border:1px solid var(--border2);border-radius:8px;padding:10px 20px;font-size:12px;font-weight:600;color:var(--cream);box-shadow:0 8px 32px rgba(0,0,0,0.4);animation:toastin 0.3s ease;z-index:300;white-space:nowrap;letter-spacing:0.04em;}
 #footer{text-align:center;padding:20px;font-size:9px;color:var(--border2);letter-spacing:0.12em;border-top:1px solid var(--border);margin-top:12px;text-transform:uppercase;}
 .empty{padding:40px 20px;text-align:center;color:var(--cream3);font-size:12px;}
+
+/* ══════════════════════════════════════════════════════
+   INCOMING STOCK — ERP Integration
+══════════════════════════════════════════════════════ */
+.nav-btn.active-incoming{background:rgba(90,144,128,.14);border-color:rgba(90,144,128,.5);color:#7acfbf;}
+.incoming-badge{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#e05252;color:#fff;font-size:9px;font-weight:700;margin-left:4px;vertical-align:middle;flex-shrink:0}
+.incoming-section{margin:0 20px 20px}
+.incoming-card{background:var(--surf);border:1px solid var(--border2);border-radius:12px;margin-bottom:14px;overflow:hidden;animation:fadein 0.3s ease}
+.incoming-card-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);flex-wrap:wrap;gap:10px}
+.incoming-bean-name{font-family:'Playfair Display',serif;font-size:15px;color:var(--cream);font-weight:700}
+.incoming-meta{font-size:10px;color:var(--cream3);margin-top:3px;letter-spacing:0.06em}
+.incoming-weight{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--green);font-weight:600}
+.incoming-card-body{padding:16px 18px}
+.incoming-match-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.incoming-match-lbl{font-size:10px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.1em;font-weight:600;min-width:110px}
+.incoming-match-val{font-size:12px;color:var(--cream);font-weight:600}
+.warning-alert{background:rgba(232,135,58,.1);border:1px solid rgba(232,135,58,.35);border-radius:8px;padding:12px 16px;margin:12px 0;font-size:11px;color:var(--orange);display:flex;align-items:flex-start;gap:8px;line-height:1.5}
+.warning-alert .warn-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.conflict-sel{background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--cream);font-size:11px;padding:6px 9px;outline:none;max-width:240px;transition:border 0.15s}
+.conflict-sel:focus{border-color:var(--gold)}
+.conflict-edit{background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--cream);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 9px;outline:none;width:200px;transition:border 0.15s}
+.conflict-edit:focus{border-color:var(--orange)}
+.incoming-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center}
+.btn-accept{background:rgba(78,200,122,.14);border:1px solid rgba(78,200,122,.4);color:var(--green);padding:8px 18px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.06em;cursor:pointer;transition:all 0.18s}
+.btn-accept:hover{background:rgba(78,200,122,.24)}
+.btn-reject{background:rgba(224,82,82,.08);border:1px solid var(--red-bd);color:var(--red);padding:8px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}
+.incoming-empty{padding:48px 20px;text-align:center;color:var(--cream3);font-size:12px;line-height:1.7}
+.match-exact{color:var(--green);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+.match-fuzzy{color:var(--orange);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+.match-none{color:var(--red);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
+
 </style>
 </head>
 <body>
@@ -353,25 +386,32 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 <!-- ═══ MAIN APP ═══ -->
 <div id="app" style="display:block"></div>
 
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script>
 'use strict';
 
 var fbDB = null;
 var fbRef = null;
+var trRef = null;  // transfer_requests Firebase ref
 
 function initFirebaseAndBoot() {
-  var app = firebase.initializeApp({
-    apiKey:        'AIzaSyCqS-QV9UfCSF0pJ3Ft4d9MjmboV2J4ZBE',
-    authDomain:    'windmill-beans.firebaseapp.com',
-    databaseURL:   'https://windmill-beans-default-rtdb.firebaseio.com/',
-    projectId:     'windmill-beans',
-    storageBucket: 'windmill-beans.appspot.com'
-  });
-  fbDB  = firebase.database(app);
-  fbRef = fbDB.ref('windmill-stock');
-  bootApp();
+  try {
+    /* Prevent double-init if called twice */
+    var existing = firebase.apps && firebase.apps.length > 0
+      ? firebase.app()
+      : firebase.initializeApp({
+          apiKey:        'AIzaSyCqS-QV9UfCSF0pJ3Ft4d9MjmboV2J4ZBE',
+          authDomain:    'windmill-beans.firebaseapp.com',
+          databaseURL:   'https://windmill-beans-default-rtdb.firebaseio.com/',
+          projectId:     'windmill-beans',
+          storageBucket: 'windmill-beans.appspot.com'
+        });
+    fbDB  = firebase.database(existing);
+    fbRef = fbDB.ref('windmill-stock');
+    trRef = fbDB.ref('transfer_requests');
+    bootApp();
+  } catch(e) {
+    console.error('Firebase init failed:', e);
+  }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -402,6 +442,7 @@ document.getElementById('setupConnectBtn').onclick = function() {
     });
     fbDB  = firebase.database(app);
     fbRef = fbDB.ref('windmill-stock');
+    trRef = fbDB.ref('transfer_requests');
 
     // Test connection with a quick read
     fbRef.child('_ping').set(Date.now()).then(function() {
@@ -418,8 +459,12 @@ document.getElementById('setupConnectBtn').onclick = function() {
   }
 };
 
-// Boot on load
-window.addEventListener("DOMContentLoaded", initFirebaseAndBoot);
+// Boot on load — safe for any script-load timing
+if(document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initFirebaseAndBoot);
+} else {
+  initFirebaseAndBoot();
+}
 
 /* ══════════════════════════════════════════════════════
    DEFAULT ITEMS
@@ -456,7 +501,10 @@ var S = {
   showCatMgr: false, newCatName: '',
   tpFilterCat: 'All', tpFilterStatus: 'All', tpFilterSearch: '',
   editBalId: null, editBalVal: '', openCommentId: null,
-  dashSort: 'name'
+  dashSort: 'name',
+  // ERP — Incoming Stock from Roastery
+  incomingRequests: [],
+  incomingConflict: {}   // { [reqKey]: { selectedItemId, editedName } }
 };
 
 /* ══════════════════════════════════════════════════════
@@ -706,6 +754,95 @@ document.addEventListener('blur', function() {
 /* ══════════════════════════════════════════════════════
    ACTIONS
 ══════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════
+   ERP — FUZZY MATCH & INCOMING STOCK ACTIONS
+══════════════════════════════════════════════════════ */
+function fuzzyMatchItem(beanName) {
+  if(!beanName) return null;
+  var lower = beanName.toLowerCase().trim();
+  // 1. Exact (case-insensitive)
+  var exact = S.items.find(function(i){ return i.name.toLowerCase() === lower; });
+  if(exact) return { item: exact, confidence: 'exact' };
+  // 2. One is substring of the other
+  var sub = S.items.find(function(i){
+    var il = i.name.toLowerCase();
+    return il.includes(lower) || lower.includes(il);
+  });
+  if(sub) return { item: sub, confidence: 'partial' };
+  // 3. Word-overlap score ≥ 0.5
+  var bWords = lower.split(/\s+/).filter(Boolean);
+  var bestMatch = null, bestScore = 0;
+  S.items.forEach(function(i){
+    var iWords = i.name.toLowerCase().split(/\s+/).filter(Boolean);
+    var overlap = bWords.filter(function(w){ return iWords.includes(w); }).length;
+    var score = overlap / Math.max(bWords.length, iWords.length);
+    if(score > bestScore){ bestScore = score; bestMatch = i; }
+  });
+  if(bestScore >= 0.4 && bestMatch) return { item: bestMatch, confidence: 'fuzzy' };
+  return null;
+}
+
+function acceptIncoming(reqKey) {
+  var req = S.incomingRequests.find(function(r){ return r.key === reqKey; });
+  if(!req){ showToast('⚠️ Request not found.'); return; }
+
+  var conflict = S.incomingConflict[reqKey] || {};
+  var targetItemId = conflict.selectedItemId;
+  var displayName  = conflict.editedName || req.bean_name;
+
+  if(!targetItemId) {
+    // Try auto-match one more time
+    var match = fuzzyMatchItem(req.bean_name);
+    if(match) {
+      targetItemId = match.item.id;
+    } else {
+      showToast('⚠️ Please select which item to update from the dropdown.');
+      return;
+    }
+  }
+
+  var item = S.items.find(function(i){ return i.id === targetItemId; });
+  if(!item){ showToast('⚠️ Selected item not found.'); return; }
+  var weight = Number(req.weight) || 0;
+  if(weight <= 0){ showToast('⚠️ Invalid weight in transfer request.'); return; }
+
+  // Log as IN movement
+  logMovement(targetItemId, 'IN', weight, '📦 Roastery Transfer — ' + esc(req.bean_name));
+
+  // Mark transfer request as completed in Firebase
+  if(trRef) {
+    trRef.child(reqKey).update({
+      status: 'completed',
+      completed_ts: new Date().toISOString(),
+      accepted_item_id: String(targetItemId),
+      accepted_item_name: item.name
+    });
+  }
+
+  // Clean up conflict state
+  delete S.incomingConflict[reqKey];
+  showToast('✅ ' + weight + ' ' + (req.unit||'kg') + ' of ' + item.name + ' added to inventory!');
+}
+
+function rejectIncoming(reqKey) {
+  if(!confirm('Reject this transfer request? The roaster will not be notified.')) return;
+  if(trRef) {
+    trRef.child(reqKey).update({ status: 'rejected', rejected_ts: new Date().toISOString() });
+  }
+  showToast('🚫 Transfer request rejected.');
+}
+
+function setConflictItem(reqKey, itemId) {
+  if(!S.incomingConflict[reqKey]) S.incomingConflict[reqKey] = {};
+  S.incomingConflict[reqKey].selectedItemId = Number(itemId);
+  render();
+}
+function setConflictName(reqKey, name) {
+  if(!S.incomingConflict[reqKey]) S.incomingConflict[reqKey] = {};
+  S.incomingConflict[reqKey].editedName = name;
+}
+
 function doLogin() {
   var el = document.getElementById('loginInput');
   var val = el ? el.value : '';
@@ -874,6 +1011,126 @@ function exportCSV() {
   showToast('📥 CSV exported!');
 }
 
+
+/* ══════════════════════════════════════════════════════
+   ERP — RENDER INCOMING STOCK PANEL
+══════════════════════════════════════════════════════ */
+function renderIncoming(h) {
+  var pendingCount = S.incomingRequests.length;
+  h += '<div class="notice view" style="margin:14px 20px 0">📥 <strong>Incoming Stock Inbox</strong> — Transfer requests from the Roastery arrive here in real-time. Review each delivery, resolve any name mismatches, then click Accept to update your inventory.</div>';
+  h += '<div class="incoming-section" style="margin-top:18px">';
+
+  if(pendingCount === 0) {
+    h += '<div class="incoming-empty">✅ Inbox is clear — no pending transfers from the Roastery.<br><span style="font-size:11px;opacity:0.6">New requests appear here automatically in real-time.</span></div>';
+  } else {
+    S.incomingRequests.forEach(function(req) {
+      var match        = fuzzyMatchItem(req.bean_name);
+      var conflict     = S.incomingConflict[req.key] || {};
+      var selectedId   = conflict.selectedItemId || (match ? match.item.id : '');
+      var confidence   = match ? match.confidence : 'none';
+      var needsReview  = (confidence !== 'exact');
+      var ts           = req.ts ? new Date(req.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+
+      h += '<div class="incoming-card">';
+
+      /* ── Card Header ── */
+      h += '<div class="incoming-card-head">';
+      h += '<div>';
+      h += '<div class="incoming-bean-name">🫘 ' + esc(req.bean_name) + '</div>';
+      h += '<div class="incoming-meta">Received: ' + esc(ts) + ' &nbsp;·&nbsp; Roast Level: ' + esc(req.roast_level || '—') + '</div>';
+      h += '</div>';
+      h += '<div class="incoming-weight">' + esc(String(req.weight || 0)) + ' ' + esc(req.unit || 'kg') + '</div>';
+      h += '</div>';
+
+      /* ── Card Body ── */
+      h += '<div class="incoming-card-body">';
+
+      if(confidence === 'exact') {
+        /* Perfect match — show green confirmation */
+        var newBal = match.item.balance + Number(req.weight || 0);
+        h += '<div class="incoming-match-row">';
+        h += '<span class="incoming-match-lbl">Matched Item</span>';
+        h += '<span class="incoming-match-val">' + esc(match.item.name) + '</span>';
+        h += '<span class="match-exact">✓ Exact Match</span>';
+        h += '</div>';
+        h += '<div class="incoming-match-row" style="margin-top:8px">';
+        h += '<span class="incoming-match-lbl">Current Stock</span>';
+        h += '<span class="incoming-match-val">' + match.item.balance + ' ' + esc(match.item.unit) + '</span>';
+        h += '<span style="color:var(--cream3);font-size:10px">→ will become ' + newBal + ' ' + esc(match.item.unit) + '</span>';
+        h += '</div>';
+
+      } else if(confidence === 'partial' || confidence === 'fuzzy') {
+        /* Close but not exact — amber warning */
+        h += '<div class="warning-alert">';
+        h += '<span class="warn-icon">⚠️</span>';
+        h += '<div><strong>Name Mismatch Detected</strong><br>';
+        h += 'Roastery sent: <code style="font-size:11px">' + esc(req.bean_name) + '</code><br>';
+        h += 'Closest match: <code style="font-size:11px">' + esc(match.item.name) + '</code><br>';
+        h += '<span style="opacity:0.75">Please confirm the correct item before accepting.</span></div>';
+        h += '</div>';
+        h += '<div class="incoming-match-row" style="margin-top:6px">';
+        h += '<span class="incoming-match-lbl">Select Item</span>';
+        h += '<select class="conflict-sel" onchange="setConflictItem(\'' + esc(req.key) + '\', this.value)">';
+        h += '<option value="">— Choose inventory item —</option>';
+        S.items.forEach(function(item) {
+          var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
+          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
+        });
+        h += '</select>';
+        h += '<span class="match-fuzzy">⚠ Review Required</span>';
+        h += '</div>';
+
+      } else {
+        /* No match at all — red warning */
+        h += '<div class="warning-alert" style="background:rgba(224,82,82,.08);border-color:var(--red-bd);color:var(--red)">';
+        h += '<span class="warn-icon">🚨</span>';
+        h += '<div><strong>Unknown Bean Name</strong><br>';
+        h += 'Roastery sent: <code style="font-size:11px">' + esc(req.bean_name) + '</code><br>';
+        h += '<span style="opacity:0.75">This name does not match any inventory item. Select the correct one below.</span></div>';
+        h += '</div>';
+        h += '<div class="incoming-match-row" style="margin-top:6px">';
+        h += '<span class="incoming-match-lbl">Select Item</span>';
+        h += '<select class="conflict-sel" onchange="setConflictItem(\'' + esc(req.key) + '\', this.value)">';
+        h += '<option value="">— Choose inventory item —</option>';
+        S.items.forEach(function(item) {
+          var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
+          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
+        });
+        h += '</select>';
+        h += '<span class="match-none">✗ No Match Found</span>';
+        h += '</div>';
+      }
+
+      /* Roaster notes */
+      if(req.notes) {
+        h += '<div class="incoming-match-row" style="margin-top:10px">';
+        h += '<span class="incoming-match-lbl">Roaster Notes</span>';
+        h += '<span class="incoming-match-val" style="font-style:italic;color:var(--cream3)">' + esc(req.notes) + '</span>';
+        h += '</div>';
+      }
+
+      /* Action buttons */
+      var canAccept = (confidence === 'exact') || !!selectedId;
+      h += '<div class="incoming-actions">';
+      h += '<button class="btn-accept"'
+        + (canAccept ? '' : ' disabled style="opacity:0.4;cursor:not-allowed"')
+        + ' onclick="acceptIncoming(\'' + esc(req.key) + '\')">'
+        + '✅ Accept &amp; Add to Inventory</button>';
+      h += '<button class="btn-reject" onclick="rejectIncoming(\'' + esc(req.key) + '\')">✕ Reject</button>';
+      if(needsReview && !selectedId) {
+        h += '<span style="font-size:10px;color:var(--orange)">← Select an item above to enable Accept</span>';
+      }
+      h += '</div>'; /* incoming-actions */
+
+      h += '</div>'; /* card-body */
+      h += '</div>'; /* incoming-card */
+    });
+  }
+
+  h += '</div>'; /* incoming-section */
+  return h;
+}
+
 /* ══════════════════════════════════════════════════════
    RENDER
 ══════════════════════════════════════════════════════ */
@@ -942,8 +1199,12 @@ function render() {
     +'<button class="nav-btn'+(S.view==='dashboard'?' active-dash':'')+'" id="navDash">☕ Overview</button>'
     +'<button class="nav-btn'+(S.view==='balance'?' active-bal':'')+'" id="navBal">⚖️ Balance</button>'
     +'<button class="nav-btn'+(S.view==='report'?' active-rpt':'')+'" id="navRpt">📊 Reports</button>'
-    +(function(){ var pendCnt = (window._pendingTransfers||[]).length; return '<button class="nav-btn'+(S.view==='incoming'?' active-dash':'')+'" id="navIncoming" style="'+(pendCnt>0?'border-color:var(--green);color:var(--green)':'')+'">📦 Incoming'+(pendCnt?' <span style="background:var(--green);color:#0c0906;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">'+pendCnt+'</span>':'')+'</button>'; })()
     +(function(){ var lowCount = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)!=='OK'; }).length; return '<button class="nav-btn'+(S.view==='provision'?' active-prov':'')+'" id="navProv">📋 Provisioning'+(lowCount?' <span style="background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">'+lowCount+'</span>':'')+'</button>'; })()
+    +(function(){
+      var iCount = S.incomingRequests ? S.incomingRequests.length : 0;
+      var badge = iCount > 0 ? '<span class="incoming-badge">'+iCount+'</span>' : '';
+      return '<button class="nav-btn'+(S.view==='incoming'?' active-incoming':'')+'" id="navIncoming">📥 Incoming'+badge+'</button>';
+    })()
     +'<button class="nav-btn '+(S.teamUnlocked?'active-team':'locked-team')+'" id="navTeam">'+(S.teamUnlocked?'✏️':'🔒')+' Team Panel</button>'
     +'</div>'
     +'<div class="h-right">'
@@ -1173,7 +1434,9 @@ function render() {
   }
 
   /* ── PROVISIONING ── */
-  if(S.view === 'provision') {
+  if(S.view === 'incoming') {
+    h = renderIncoming(h);
+  } else if(S.view === 'provision') {
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
     var outItems  = needItems.filter(function(i){ return i.balance === 0; });
     var lowItems  = needItems.filter(function(i){ return i.balance > 0; });
@@ -1390,88 +1653,6 @@ function render() {
       h += '</div></div>';
     }
     h += '<div style="height:1px"></div>'; // spacer
-  }
-
-  /* ── INCOMING STOCK (ERP Integration) ── */
-  if(S.view === 'incoming') {
-    var pending   = (window._pendingTransfers   || []);
-    var completed = (window._completedTransfers || []);
-
-    h += '<div class="section-label">📦 Incoming Stock — Live Roastery Feed</div>';
-    h += '<div style="margin:0 20px 16px;padding:12px 16px;background:rgba(78,200,122,0.05);border:1px solid var(--green-bd);border-radius:10px;font-size:11px;color:var(--cream2);line-height:1.7">'
-      +'🟢 <strong style="color:var(--green)">Live inbox</strong> — When the roastery finishes a batch and clicks "Send to Store", it appears here instantly. '
-      +'Review the bean name, correct any typos, then click <strong>Accept</strong> to add it to your inventory. The roastery will see "Confirmed" in their dashboard.'
-      +'</div>';
-
-    h += '<div class="section-label" style="color:var(--orange)">⏳ Pending — Needs Your Approval ('+pending.length+')</div>';
-    if(!pending.length){
-      h += '<div style="margin:0 20px 20px;padding:32px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;text-align:center;color:var(--cream3);font-size:12px">No pending transfers. When the roastery sends stock, it will appear here instantly.</div>';
-    } else {
-      pending.forEach(function(t){
-        var exactMatch = S.items.find(function(i){ return i.name.toLowerCase()===t.bean_name.toLowerCase(); });
-        var fuzzyMatches = S.items.filter(function(i){
-          var a=i.name.toLowerCase(), b=(t.bean_name||'').toLowerCase();
-          return !exactMatch && (a.includes(b)||b.includes(a)||(a.split(' ').some(function(w){return b.includes(w)&&w.length>3;})));
-        });
-        var hasConflict = !exactMatch;
-        var defaultItemId = exactMatch ? exactMatch.id : (fuzzyMatches.length ? fuzzyMatches[0].id : '');
-
-        h += '<div style="margin:0 20px 14px;background:var(--surf);border:1px solid '+(hasConflict?'var(--orng-bd)':'var(--green-bd)')+';border-radius:12px;overflow:hidden">';
-        h += '<div style="background:'+(hasConflict?'rgba(232,135,58,0.08)':'rgba(78,200,122,0.06)')+';padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">';
-        h += '<div style="display:flex;align-items:center;gap:10px">';
-        h += '<span style="font-size:22px">'+(hasConflict?'⚠️':'✅')+'</span>';
-        h += '<div><div style="font-size:14px;font-weight:700;color:'+(hasConflict?'var(--orange)':'var(--cream)')+'">'+esc(t.bean_name)+'</div>';
-        h += '<div style="font-size:10px;color:var(--cream3)">Sent from Roastery · '+new Date(t.sent_at||t.sent_date+'T12:00:00').toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+'</div></div></div>';
-        h += '<div style="display:flex;gap:8px;align-items:center">';
-        h += '<span style="font-family:\'JetBrains Mono\',monospace;font-size:20px;font-weight:700;color:var(--gold2)">'+Number(t.weight_kg||0).toFixed(1)+'</span><span style="font-size:11px;color:var(--cream3)">kg</span>';
-        if(t.level) h += '<span class="badge badge-ok" style="margin-left:6px">'+esc(t.level)+'</span>';
-        h += '</div></div>';
-        h += '<div style="padding:14px 16px">';
-        if(t.notes) h += '<div style="font-size:11px;color:var(--cream3);margin-bottom:12px;padding:8px 12px;background:var(--bg2);border-radius:6px;border-left:3px solid var(--border2)">📝 '+esc(t.notes)+'</div>';
-        if(hasConflict){
-          h += '<div style="background:rgba(232,135,58,0.08);border:1px solid var(--orng-bd);border-radius:8px;padding:10px 12px;margin-bottom:12px">';
-          h += '<div style="font-size:11px;font-weight:700;color:var(--orange);margin-bottom:4px">⚠️ Name Mismatch — "'+esc(t.bean_name)+'" not found in your inventory</div>';
-          h += '<div style="font-size:10px;color:var(--cream3)">Select the correct item, or add as a new item.</div></div>';
-        } else {
-          h += '<div style="font-size:11px;color:var(--green);margin-bottom:10px">✅ Exact match found in your inventory.</div>';
-        }
-        h += '<div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">';
-        h += '<div style="flex:2 1 180px"><label style="display:block;font-size:9px;color:var(--cream3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.12em;font-weight:600">'+(hasConflict?'⬇ Select Correct Item':'Inventory Item to Credit')+'</label>';
-        h += '<select class="inp" id="accept-item-'+esc(t.id)+'">';
-        h += '<option value="">— Select item —</option>';
-        S.items.forEach(function(i){ h += '<option value="'+i.id+'"'+(i.id==defaultItemId?' selected':'')+'>'+esc(i.name)+' ('+i.balance+' '+esc(i.unit)+')</option>'; });
-        h += '<option value="__new__">➕ Add as new: "'+esc(t.bean_name)+'"</option>';
-        h += '</select></div>';
-        h += '<div style="flex:1 1 100px"><label style="display:block;font-size:9px;color:var(--cream3);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.12em;font-weight:600">Weight (kg)</label>';
-        h += '<input type="number" class="inp" id="accept-kg-'+esc(t.id)+'" value="'+Number(t.weight_kg||0).toFixed(1)+'" min="0.1" step="0.1"></div>';
-        h += '<button class="btn-save" style="flex:0 0 auto;padding:9px 18px;font-size:12px" data-accept-id="'+esc(t.id)+'">✅ Accept</button>';
-        h += '<button class="btn-cancel" style="flex:0 0 auto;padding:9px 14px;font-size:11px" data-reject-id="'+esc(t.id)+'">❌ Reject</button>';
-        h += '</div></div></div>';
-      });
-    }
-
-    h += '<div class="section-label" style="margin-top:8px">✅ Completed Transfers ('+completed.length+')</div>';
-    if(!completed.length){
-      h += '<div style="margin:0 20px 20px;padding:20px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;text-align:center;color:var(--cream3);font-size:12px">No completed transfers yet.</div>';
-    } else {
-      h += '<div style="margin:0 20px 20px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden"><div style="overflow-x:auto">';
-      h += '<table style="width:100%;border-collapse:collapse;min-width:520px"><thead><tr style="background:var(--bg2)">';
-      ['Date Sent','Bean (Roastery)','Item Credited','Weight','Accepted At'].forEach(function(col){
-        h += '<th style="padding:9px 14px;text-align:left;font-size:9px;color:var(--cream3);letter-spacing:0.1em;text-transform:uppercase;font-weight:600">'+col+'</th>';
-      });
-      h += '</tr></thead><tbody>';
-      completed.forEach(function(t,idx){
-        var wasEdited = t.accepted_bean_name && t.accepted_bean_name !== t.bean_name;
-        h += '<tr style="border-top:1px solid var(--border)'+( idx===0?';background:rgba(78,200,122,0.03)':'')+'">';
-        h += '<td style="padding:9px 14px;font-size:11px;color:var(--cream3)">'+new Date(t.sent_at||t.sent_date+'T12:00:00').toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+'</td>';
-        h += '<td style="padding:9px 14px;font-size:12px">'+(wasEdited?'<span style="text-decoration:line-through;color:var(--cream3);font-size:10px">'+esc(t.bean_name)+'</span><br>':'')+esc(t.accepted_bean_name||t.bean_name)+'</td>';
-        h += '<td style="padding:9px 14px;font-size:12px;color:var(--gold2)">'+esc(t.accepted_item_name||t.accepted_bean_name||t.bean_name)+'</td>';
-        h += '<td style="padding:9px 14px;font-size:12px;font-family:\'JetBrains Mono\',monospace;color:var(--green)">+'+Number(t.accepted_kg||t.weight_kg||0).toFixed(1)+' kg</td>';
-        h += '<td style="padding:9px 14px;font-size:10px;color:var(--cream3)">'+(t.accepted_at?new Date(t.accepted_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—')+'</td>';
-        h += '</tr>';
-      });
-      h += '</tbody></table></div></div>';
-    }
   }
 
   h += '<div id="footer">Windmill Cafe & Roastery · Firebase Realtime Sync · Auto-updates pushed live</div>';
@@ -1744,125 +1925,6 @@ function bindEvents() {
     });
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Order list copied to clipboard!'); });
   };
-
-  /* ── ERP: Accept / Reject transfer buttons ── */
-  document.querySelectorAll('[data-accept-id]').forEach(function(b){
-    b.onclick=function(){
-      var tid = this.getAttribute('data-accept-id');
-      var itemSel = document.getElementById('accept-item-'+tid);
-      var kgInp   = document.getElementById('accept-kg-'+tid);
-      if(!itemSel){ showToast('UI error — reload and try again.'); return; }
-      var selectedId = itemSel.value;
-      var kg = parseFloat(kgInp ? kgInp.value : 0);
-      if(!selectedId){ showToast('⚠️ Please select an inventory item first.'); return; }
-      if(!kg || kg <= 0){ showToast('⚠️ Please enter a valid weight.'); return; }
-      acceptTransfer(tid, selectedId, kg);
-    };
-  });
-  document.querySelectorAll('[data-reject-id]').forEach(function(b){
-    b.onclick=function(){
-      var tid = this.getAttribute('data-reject-id');
-      if(confirm('Reject this transfer request? The roastery will see it as rejected.')){ rejectTransfer(tid); }
-    };
-  });
-}
-
-/* ════════════════════════════════════════════════════════════════
-   ERP INTEGRATION — STORE SIDE
-   Shared Firebase paths:
-     transfer_requests/   — live inbox (roastery pushes, store reads)
-   store_inventory node is the Store's own S.items (via fbRef)
-════════════════════════════════════════════════════════════════ */
-
-window._pendingTransfers   = [];
-window._completedTransfers = [];
-window._allTransfers       = [];
-
-var _transferListenerOn = false;
-
-function attachTransferListener() {
-  if(_transferListenerOn) return;
-  _transferListenerOn = true;
-
-  fbDB.ref('transfer_requests').on('value', function(snap) {
-    var val = snap.val() || {};
-    var all = Object.values(val).sort(function(a,b){
-      return (b.sent_at||'').localeCompare(a.sent_at||'');
-    });
-    window._allTransfers       = all;
-    window._pendingTransfers   = all.filter(function(t){ return t.status === 'pending'; });
-    window._completedTransfers = all.filter(function(t){ return t.status === 'completed' || t.status === 'rejected'; });
-
-    /* If on incoming view, re-render to show latest */
-    if(S.view === 'incoming') render();
-    /* Always re-render nav to update pending badge count */
-    else render();
-  }, function(err){
-    console.warn('Transfer listener error:', err);
-  });
-}
-
-/* ---- ACCEPT a transfer request ---- */
-function acceptTransfer(transferId, selectedItemId, kg) {
-  var item;
-  /* Special case: add as new item */
-  if(selectedItemId === '__new__') {
-    var transfer = window._allTransfers.find(function(t){ return t.id === transferId; });
-    var beanName = transfer ? transfer.bean_name : 'Unknown Bean';
-    var newId = Date.now();
-    item = { id: newId, name: beanName, category: 'Single Origin', origin: 'Roastery Transfer', unit: 'kg', balance: 0, threshold: 30 };
-    S.items = S.items.concat([item]);
-  } else {
-    item = S.items.find(function(i){ return String(i.id) === String(selectedItemId); });
-    if(!item){ showToast('⚠️ Item not found in inventory.'); return; }
-  }
-
-  var transfer = window._allTransfers.find(function(t){ return t.id === transferId; });
-  if(!transfer){ showToast('⚠️ Transfer not found.'); return; }
-
-  /* 1 — Add weight to store inventory */
-  var newBal = item.balance + kg;
-  S.items = S.items.map(function(i){ return String(i.id)===String(item.id) ? Object.assign({},i,{balance:newBal}) : i; });
-
-  /* 2 — Log in movement history */
-  S.history = [{
-    id: Date.now(), ts: new Date().toISOString(),
-    itemId: item.id, itemName: item.name,
-    type: 'IN', qty: kg,
-    note: '📦 Roastery transfer — ' + transfer.bean_name + (transfer.notes ? ' | ' + transfer.notes : '')
-  }].concat(S.history).slice(0, 500);
-
-  /* 3 — Save store inventory to Firebase */
-  saveAll();
-
-  /* 4 — Update transfer_requests status to "completed" → Roastery sees "Confirmed" */
-  var acceptedName = item.name;
-  fbDB.ref('transfer_requests/' + transferId).update({
-    status:             'completed',
-    accepted_at:        new Date().toISOString(),
-    accepted_bean_name: acceptedName,
-    accepted_item_name: acceptedName,
-    accepted_item_id:   String(item.id),
-    accepted_kg:        kg
-  }).then(function(){
-    showToast('✅ ' + kg.toFixed(1) + ' kg of "' + item.name + '" added to inventory!');
-  }).catch(function(err){
-    showToast('⚠️ Inventory updated locally but could not sync transfer status: ' + err.message);
-  });
-
-  render();
-}
-
-/* ---- REJECT a transfer request ---- */
-function rejectTransfer(transferId) {
-  fbDB.ref('transfer_requests/' + transferId).update({
-    status:      'rejected',
-    rejected_at: new Date().toISOString()
-  }).then(function(){
-    showToast('❌ Transfer rejected — roastery will be notified.');
-  }).catch(function(err){
-    showToast('Could not update transfer: ' + err.message);
-  });
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1886,9 +1948,6 @@ function bootApp() {
     S.lastSync = new Date();
     render();
 
-    /* ERP: start listening for roastery transfer requests */
-    attachTransferListener();
-
     /* Set up real-time listener.
        _ignoreRemote = true for 1 second to block the immediate
        echo-back that fires as soon as .on() is registered. */
@@ -1900,6 +1959,17 @@ function bootApp() {
       if(!d) return;
       applyRemoteData(d, true);
     });
+
+    /* ERP — listen for incoming stock requests from the Roastery */
+    if(trRef) {
+      trRef.on('value', function(snap) {
+        var trData = snap.val() || {};
+        S.incomingRequests = Object.keys(trData).map(function(k) {
+          return Object.assign({}, trData[k], { key: k });
+        }).filter(function(r) { return r.status === 'pending'; });
+        render();
+      });
+    }
   });
 }
 </script>
