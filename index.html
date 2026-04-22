@@ -55,7 +55,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");}
 
 @keyframes spin{to{transform:rotate(360deg);}}
-@keyframes spin-slow{to{transform:rotate(360deg);}}
+@keyframes spin-slow{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
 @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.25;}}
 @keyframes fadein{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
 @keyframes slidein{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:none;}}
@@ -114,10 +114,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .prov-stat-num{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;}
 .prov-stat-lbl{font-size:9px;color:var(--cream3);letter-spacing:0.14em;text-transform:uppercase;margin-top:4px;}
 .prov-table{background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden;}
-.prov-hdr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.4fr 1.6fr;padding:9px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-width:520px;}
+.prov-hdr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1.4fr 1.6fr;padding:9px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-width:560px;}
 .prov-hdr span{font-size:9px;color:var(--cream3);letter-spacing:0.12em;text-transform:uppercase;font-weight:600;text-align:right;}
 .prov-hdr span:first-child{text-align:left;}
-.prov-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1.4fr 1.6fr;padding:11px 16px;border-bottom:1px solid var(--border);align-items:center;min-width:520px;transition:background 0.15s;}
+.prov-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 1.4fr 1.6fr;padding:11px 16px;border-bottom:1px solid var(--border);align-items:center;min-width:560px;transition:background 0.15s;}
 .prov-row:last-child{border-bottom:none;}
 .prov-row:hover{background:var(--surf2);}
 .prov-row span{font-size:12px;font-family:'JetBrains Mono',monospace;text-align:right;}
@@ -272,7 +272,101 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .sort-btn{padding:4px 10px;border-radius:5px;font-size:10px;border:1px solid var(--border2);color:var(--cream3);background:none;transition:all 0.15s;cursor:pointer;}
 .sort-btn.on{background:rgba(200,146,60,0.1);border-color:var(--gold);color:var(--gold2);}
 
-#overlay{position:fixed;inset:0;background:rgba(8,5,2,0.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
+/* ── CUSTOM CONFIRM MODAL ── */
+.confirm-modal{background:var(--surf);border:1px solid var(--border2);border-radius:14px;padding:0;width:100%;max-width:360px;animation:popin 0.22s ease;overflow:hidden;}
+.confirm-modal-body{padding:24px 24px 16px;font-size:13px;color:var(--cream);line-height:1.6;}
+.confirm-modal-title{font-family:'Playfair Display',serif;font-size:17px;color:var(--gold3);margin-bottom:8px;font-weight:700;}
+.confirm-modal-msg{font-size:12px;color:var(--cream2);line-height:1.6;}
+.confirm-modal-foot{display:flex;gap:8px;padding:12px 24px 20px;}
+.btn-confirm-ok{flex:1;background:rgba(224,82,82,0.14);border:1px solid var(--red-bd);color:var(--red);padding:10px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.15s;}
+.btn-confirm-ok:hover{background:rgba(224,82,82,0.24);}
+.btn-confirm-cancel{flex:1;background:var(--surf2);border:1px solid var(--border2);color:var(--cream3);padding:10px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;}
+
+/* ══════════════════════════════════════════════════════
+   THEME VARIABLES — Light / Forest / Ocean
+══════════════════════════════════════════════════════ */
+[data-theme="light"]{
+  --bg:#f5f0e8;--bg2:#ede5d8;--surf:#ffffff;--surf2:#f0e8d8;
+  --border:#d4c4a8;--border2:#c0a878;
+  --gold:#9a6010;--gold2:#7a4808;--gold3:#5a3000;
+  --cream:#2a1808;--cream2:#4a3018;--cream3:#7a5830;
+  --green:#1a7a3a;--green-bg:rgba(26,122,58,0.1);--green-bd:rgba(26,122,58,0.35);
+  --orange:#b05010;--orng-bg:rgba(176,80,16,0.1);--orng-bd:rgba(176,80,16,0.35);
+  --red:#b02020;--red-bg:rgba(176,32,32,0.1);--red-bd:rgba(176,32,32,0.3);
+  --blue:#2060a0;
+}
+[data-theme="light"] body{color:var(--cream2);background:var(--bg);}
+[data-theme="light"] body::after{display:none;}
+
+[data-theme="forest"]{
+  --bg:#060d06;--bg2:#0a140a;--surf:#101a10;--surf2:#162216;
+  --border:#1a2e1a;--border2:#224022;
+  --gold:#5ab55a;--gold2:#78d078;--gold3:#a8f0a8;
+  --cream:#e0f4e0;--cream2:#a8d4a8;--cream3:#60a060;
+  --green:#50e080;--green-bg:rgba(80,224,128,0.1);--green-bd:rgba(80,224,128,0.3);
+  --orange:#d0a030;--orng-bg:rgba(208,160,48,0.1);--orng-bd:rgba(208,160,48,0.3);
+  --red:#e05050;--red-bg:rgba(224,80,80,0.1);--red-bd:rgba(224,80,80,0.3);
+  --blue:#40b8d0;
+}
+
+[data-theme="ocean"]{
+  --bg:#04090f;--bg2:#071018;--surf:#0c1a28;--surf2:#102030;
+  --border:#162840;--border2:#1e3858;
+  --gold:#5090d8;--gold2:#70b0f0;--gold3:#a0d0ff;
+  --cream:#d8eeff;--cream2:#90b8e0;--cream3:#5080a8;
+  --green:#30c878;--green-bg:rgba(48,200,120,0.1);--green-bd:rgba(48,200,120,0.3);
+  --orange:#f08030;--orng-bg:rgba(240,128,48,0.1);--orng-bd:rgba(240,128,48,0.3);
+  --red:#e84040;--red-bg:rgba(232,64,64,0.1);--red-bd:rgba(232,64,64,0.3);
+  --blue:#40c0ff;
+}
+
+/* ══════════════════════════════════════════════════════
+   SETTINGS PANEL
+══════════════════════════════════════════════════════ */
+#settings-overlay{position:fixed;inset:0;background:rgba(8,5,2,0.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:500;padding:20px;}
+.settings-panel{background:var(--surf);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:500px;animation:popin 0.28s ease;overflow:hidden;}
+.settings-hdr{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.settings-title{font-family:'Playfair Display',serif;font-size:18px;color:var(--gold3);font-weight:700;}
+.settings-body{padding:20px 24px;display:flex;flex-direction:column;gap:22px;max-height:72vh;overflow-y:auto;}
+.settings-sec-lbl{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.18em;font-weight:700;margin-bottom:10px;}
+.theme-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.theme-opt{border:2px solid var(--border2);border-radius:10px;padding:10px 6px 8px;text-align:center;cursor:pointer;transition:all 0.18s;background:transparent;}
+.theme-opt.active{border-color:var(--gold);background:rgba(200,146,60,0.06);}
+.theme-opt:hover:not(.active){border-color:var(--gold2);}
+.theme-swatch{width:36px;height:36px;border-radius:50%;margin:0 auto 6px;border:2px solid rgba(255,255,255,0.12);}
+.theme-name{font-size:10px;color:var(--cream3);font-weight:600;letter-spacing:0.04em;}
+.accent-row{display:flex;gap:9px;align-items:center;flex-wrap:wrap;}
+.accent-dot{width:26px;height:26px;border-radius:50%;cursor:pointer;transition:all 0.15s;flex-shrink:0;border:2px solid transparent;}
+.accent-dot:hover,.accent-dot.active{border-color:var(--cream);transform:scale(1.2);}
+.settings-clock{font-family:'JetBrains Mono',monospace;font-size:40px;font-weight:600;color:var(--gold3);letter-spacing:0.04em;text-align:center;padding:16px;background:var(--bg2);border-radius:12px;border:1px solid var(--border2);line-height:1;}
+.settings-clock-date{font-size:11px;color:var(--cream3);text-align:center;margin-top:6px;letter-spacing:0.12em;text-transform:uppercase;}
+.settings-clock-secs{font-size:22px;color:var(--gold2);opacity:0.7;margin-left:2px;}
+.h-clock{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3);letter-spacing:0.06em;white-space:nowrap;padding:4px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);}
+.settings-btn{background:transparent;border:1px solid var(--border2);color:var(--cream3);width:28px;height:28px;border-radius:5px;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.settings-btn:hover{border-color:var(--gold);color:var(--gold2);}
+.pwd-modal{background:var(--surf);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:400px;animation:popin 0.24s ease;overflow:hidden;}
+.pwd-modal-hdr{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
+.pwd-modal-body{padding:20px 22px;}
+.pwd-modal-foot{padding:12px 22px 18px;display:flex;gap:8px;}
+
+@media print {
+  #header,.h-nav,.h-right,.metrics,.notice,.manual-alert-panel,
+  .filter-row,.chips,.rpt-controls,#footer,.btn-rpt-run,
+  .btn-export,#printRptBtn,#exportCsvBtn,.rpt-cat-chip,
+  .nav-btn,.section-label,.lock-btn,.refresh-btn { display:none!important; }
+  body { background:#fff!important; color:#000!important; font-size:11pt; }
+  .rpt-table, .rpt-hdr, .rpt-row { border-color:#ccc!important; }
+  .rpt-product-name { color:#000!important; }
+  .rpt-card { border-color:#ccc!important; background:#f9f9f9!important; }
+  .rpt-card-val, .rpt-num, .rpt-date-cell { color:#000!important; }
+}
+
+@keyframes shimmer{0%{background-position:-400px 0;}100%{background-position:400px 0;}}
+.skeleton{background:linear-gradient(90deg,var(--surf) 25%,var(--surf2) 50%,var(--surf) 75%);background-size:800px 100%;animation:shimmer 1.6s infinite;border-radius:6px;}
+.skel-card{height:165px;border-radius:12px;}
+.skel-bar{height:10px;margin:6px 0;}
+.skel-row{height:36px;border-radius:6px;margin-bottom:8px;}
+background:rgba(8,5,2,0.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
 .modal{background:var(--surf);border:1px solid var(--border2);border-radius:16px;padding:0;width:100%;max-width:400px;animation:popin 0.28s ease;overflow:hidden;}
 .modal-hdr{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
 .modal-icon{font-size:24px;animation:glow 2.5s infinite;}
@@ -338,6 +432,10 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .manual-alert-btn:hover{background:rgba(200,146,60,.26);}
 .manual-alert-btn:active{transform:scale(0.97);}
 /* ════════════════════════════════════════════════════════════════════ */
+
+.alert-hdr-btn{background:rgba(200,146,60,0.12);border:1px solid rgba(200,146,60,0.45);border-radius:6px;color:var(--gold2);font-size:10px;font-weight:700;letter-spacing:0.07em;padding:5px 12px;transition:background 0.15s,transform 0.1s;white-space:nowrap;}
+.alert-hdr-btn:hover{background:rgba(200,146,60,0.24);}
+.alert-hdr-btn:active{transform:scale(0.96);}
 
 </style>
 </head>
@@ -519,17 +617,69 @@ var S = {
   tpFilterCat: 'All', tpFilterStatus: 'All', tpFilterSearch: '',
   editBalId: null, editBalVal: '', openCommentId: null,
   dashSort: 'name',
+  histPage: 1,          // history pagination: how many pages of 25 to show
+  commentUser: '',      // username for comments
+  confirmModal: null,   // { title, msg, onOk } — custom confirm dialog
   // ERP — Incoming Stock from Roastery
   incomingRequests: [],
-  incomingConflict: {}   // { [reqKey]: { selectedItemId, editedName } }
+  incomingConflict: {},   // { [reqKey]: { selectedItemId, editedName } }
+  showAlertModal: false,
+  showSettings: false,
+  theme: (function(){ try { return localStorage.getItem('wc-theme') || 'dark'; } catch(e) { return 'dark'; } })(),
+  accentPreset: (function(){ try { return localStorage.getItem('wc-accent') || ''; } catch(e) { return ''; } })()
 };
+
+/* ══════════════════════════════════════════════════════
+   THEME & ACCENT FUNCTIONS
+══════════════════════════════════════════════════════ */
+var ACCENT_PRESETS = [
+  {id:'gold',   label:'Gold',   val:'#c8923c', val2:'#e5b060', val3:'#f5cc82'},
+  {id:'rose',   label:'Rose',   val:'#c85070', val2:'#e07090', val3:'#f5a0b8'},
+  {id:'violet', label:'Violet', val:'#8060c8', val2:'#a080e8', val3:'#c8b0ff'},
+  {id:'teal',   label:'Teal',   val:'#20a898', val2:'#40c8b8', val3:'#80e8d8'},
+  {id:'amber',  label:'Amber',  val:'#c87820', val2:'#e8a030', val3:'#f5c860'},
+  {id:'coral',  label:'Coral',  val:'#d05040', val2:'#e87060', val3:'#f5a090'}
+];
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme', S.theme === 'dark' ? '' : S.theme);
+  try { localStorage.setItem('wc-theme', S.theme); } catch(e) {}
+  applyAccent();
+}
+
+function applyAccent() {
+  if(!S.accentPreset) return;
+  var p = ACCENT_PRESETS.find(function(x){ return x.id === S.accentPreset; });
+  if(!p) return;
+  var r = document.documentElement;
+  r.style.setProperty('--gold',  p.val);
+  r.style.setProperty('--gold2', p.val2);
+  r.style.setProperty('--gold3', p.val3);
+  try { localStorage.setItem('wc-accent', S.accentPreset); } catch(e) {}
+}
+
+function resetAccent() {
+  document.documentElement.style.removeProperty('--gold');
+  document.documentElement.style.removeProperty('--gold2');
+  document.documentElement.style.removeProperty('--gold3');
+  S.accentPreset = '';
+  try { localStorage.removeItem('wc-accent'); } catch(e) {}
+}
+
+function fmtClock() {
+  var now = new Date();
+  var h = String(now.getHours()).padStart(2,'0');
+  var m = String(now.getMinutes()).padStart(2,'0');
+  var s = String(now.getSeconds()).padStart(2,'0');
+  return { hm: h+':'+m, s: s, date: now.toLocaleDateString([],{weekday:'long',year:'numeric',month:'long',day:'numeric'}) };
+}
 
 /* ══════════════════════════════════════════════════════
    BUSY GUARD — prevents re-render while user is typing
 ══════════════════════════════════════════════════════ */
 function isBusy() {
   // Any modal open
-  if(S.showLogin || S.logModal !== null) return true;
+  if(S.showLogin || S.logModal !== null || S.confirmModal !== null) return true;
   // Any inline form active
   if(S.showAddItem || S.showCPwd) return true;
   // Any input/textarea has focus
@@ -541,7 +691,12 @@ function isBusy() {
 /* ══════════════════════════════════════════════════════
    HELPERS
 ══════════════════════════════════════════════════════ */
+function showConfirm(title, msg, onOk) {
+  S.confirmModal = { title: title, msg: msg, onOk: onOk };
+  render();
+}
 function getStatus(bal, thr) { return bal === 0 ? 'OUT' : bal < thr ? 'LOW' : 'OK'; }
+
 var SM = {
   OK:  {lbl:'IN STOCK', cls:'badge-ok',  color:'var(--green)',  bar:'var(--green)'},
   LOW: {lbl:'LOW STOCK',cls:'badge-low', color:'var(--orange)', bar:'var(--orange)'},
@@ -632,6 +787,23 @@ function buildDailyLedger(itemId, fromDate, toDate) {
     open = close;
   });
   return rows;
+}
+
+/* Returns average daily OUT (kg/day) for an item over the last 30 days */
+function avgDailyUsage(itemId) {
+  var cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  var entries = S.history.filter(function(e){
+    return Number(e.itemId) === Number(itemId) &&
+           (e.type === 'OUT' || e.type === 'WASTE') &&
+           new Date(e.ts).getTime() >= cutoff;
+  });
+  if(!entries.length) return 0;
+  var totalOut = entries.reduce(function(s,e){ return s + Number(e.qty); }, 0);
+  // count distinct days with activity
+  var days = {};
+  entries.forEach(function(e){ days[new Date(e.ts).toDateString()] = 1; });
+  var activeDays = Object.keys(days).length;
+  return activeDays ? Math.round((totalOut / activeDays) * 10) / 10 : 0;
 }
 
 function defaultDateRange() {
@@ -797,6 +969,8 @@ function sendManualAlert() {
   if (!alertsRef) { showToast('⚠️ Firebase not ready yet.'); return; }
   sendStockAlert({ type: 'manual', message: '📢 ' + msg });
   inp.value = '';
+  S.showAlertModal = false;
+  render();
   showToast('📨 Alert sent to Roastery!');
 }
 
@@ -855,7 +1029,7 @@ function objToArr(obj) {
 function showPendingBanner(show) {
   var el = document.getElementById('pending-banner');
   if(!el) return;
-  el.className = show ? '' : 'hidden';
+  el.className = show ? 'visible' : 'hidden';
 }
 
 /* Whenever user finishes editing (blur on any input), apply pending update */
@@ -944,11 +1118,20 @@ function acceptIncoming(reqKey) {
 }
 
 function rejectIncoming(reqKey) {
-  if(!confirm('Reject this transfer request? The roaster will not be notified.')) return;
-  if(trRef) {
-    trRef.child(reqKey).update({ status: 'rejected', rejected_ts: new Date().toISOString() });
-  }
-  showToast('🚫 Transfer request rejected.');
+  var req = S.incomingRequests.find(function(r){ return r.key === reqKey; });
+  if(!req) return;
+  showConfirm('Reject Transfer', 'Reject transfer of '+req.bean_name+' ('+req.weight+' '+(req.unit||'kg')+')? The roastery will be notified.', function(){
+    if(trRef) {
+      trRef.child(reqKey).update({ status: 'rejected', rejected_ts: new Date().toISOString() });
+    }
+    if(alertsRef) {
+      sendStockAlert({
+        type: 'transfer_rejected',
+        message: '🚫 Transfer rejected: ' + req.bean_name + ' (' + req.weight + ' ' + (req.unit||'kg') + '). Please contact the store for details.'
+      });
+    }
+    showToast('🚫 Transfer request rejected. Roastery notified.');
+  });
 }
 
 function setConflictItem(reqKey, itemId) {
@@ -1037,10 +1220,12 @@ function addItem(item) {
   saveAll(); showToast('✅ '+item.name+' added.'); render();
 }
 function deleteItem(id) {
-  if(!confirm('Delete this item?')) return;
   var item = S.items.find(function(i){ return i.id === id; });
-  S.items = S.items.filter(function(i){ return i.id !== id; });
-  saveAll(); showToast('🗑 '+item.name+' removed.'); render();
+  if(!item) return;
+  showConfirm('Delete Item', 'Remove "'+item.name+'" from inventory? This cannot be undone.', function(){
+    S.items = S.items.filter(function(i){ return i.id !== id; });
+    saveAll(); showToast('🗑 '+item.name+' removed.'); render();
+  });
 }
 function changePwd(np) {
   S.password = np; S.showCPwd = false; S.cpOld = S.cpNew = S.cpConf = S.cpErr = '';
@@ -1048,23 +1233,26 @@ function changePwd(np) {
 }
 
 function clearAllHistory() {
-  if(!confirm('⚠️ Delete ALL movement history?\n\nThis cannot be undone. Stock balances will NOT change — only the history log is cleared.')) return;
-  S.history = [];
-  fbRef.child('history').remove();
-  showToast('🗑 All history cleared.'); render();
+  showConfirm('Clear All History', '⚠️ Delete ALL movement history? Stock balances will NOT change — only the history log is cleared. This cannot be undone.', function(){
+    S.history = [];
+    fbRef.child('history').remove();
+    showToast('🗑 All history cleared.'); render();
+  });
 }
 
 function deleteHistoryDay(day) {
   var label = day === new Date().toDateString() ? 'today' : day === new Date(Date.now()-86400000).toDateString() ? 'yesterday' : day;
-  if(!confirm('Delete all entries for '+label+'?\n\nNote: stock balances will NOT be changed.')) return;
-  S.history = S.history.filter(function(e){ return new Date(e.ts).toDateString() !== day; });
-  saveAll(); showToast('🗑 Deleted all entries for '+label+'.'); render();
+  showConfirm('Delete Day\'s History', 'Delete all entries for '+label+'? Stock balances will NOT be changed.', function(){
+    S.history = S.history.filter(function(e){ return new Date(e.ts).toDateString() !== day; });
+    saveAll(); showToast('🗑 Deleted all entries for '+label+'.'); render();
+  });
 }
 
 function deleteHistoryEntry(entryId) {
-  if(!confirm('Delete this entry from history?\n\nNote: the stock balance will NOT be changed. Use ↩ Reverse if you also want to fix the balance.')) return;
-  S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
-  saveAll(); showToast('🗑 Entry deleted.'); render();
+  showConfirm('Delete Entry', 'Delete this entry from history? Stock balance will NOT change. Use ↩ Reverse if you also want to fix the balance.', function(){
+    S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
+    saveAll(); showToast('🗑 Entry deleted.'); render();
+  });
 }
 
 function reverseEntry(entryId) {
@@ -1072,34 +1260,35 @@ function reverseEntry(entryId) {
   if(!entry) return;
   var item = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
   if(!item) { showToast('⚠️ Item no longer exists.'); return; }
-  if(!confirm('Reverse this entry?\n\n'+entry.type+' '+entry.qty+' '+item.unit+' for "'+item.name+'"\n\nThis will undo the balance change.')) return;
-  // Reverse the balance: IN → subtract, OUT → add
-  var newBal = entry.type === 'IN'
-    ? Math.max(0, item.balance - entry.qty)
-    : item.balance + entry.qty;
-  S.items = S.items.map(function(i){ return i.id === item.id ? Object.assign({},i,{balance:newBal}) : i; });
-  // Remove the original entry and add a reversal note
-  S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
-  S.history = [{
-    id: Date.now(), ts: new Date().toISOString(),
-    itemId: item.id, itemName: item.name,
-    type: entry.type === 'IN' ? 'OUT' : 'IN',
-    qty: entry.qty,
-    note: '↩ REVERSAL of '+entry.type+' entry'+(entry.note?' (was: '+entry.note+')':'')
-  }].concat(S.history).slice(0,100);
-  saveAll();
-  showToast('↩ Entry reversed for '+item.name);
-  render();
+  showConfirm('Reverse Entry', 'Reverse '+entry.type+' of '+entry.qty+' '+item.unit+' for "'+item.name+'"? This will undo the balance change.', function(){
+    var newBal = entry.type === 'IN'
+      ? Math.max(0, item.balance - entry.qty)
+      : item.balance + entry.qty;
+    S.items = S.items.map(function(i){ return i.id === item.id ? Object.assign({},i,{balance:newBal}) : i; });
+    S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
+    S.history = [{
+      id: Date.now(), ts: new Date().toISOString(),
+      itemId: item.id, itemName: item.name,
+      type: entry.type === 'IN' ? 'OUT' : 'IN',
+      qty: entry.qty,
+      note: '↩ REVERSAL of '+entry.type+' entry'+(entry.note?' (was: '+entry.note+')':'')
+    }].concat(S.history).slice(0,500);
+    saveAll();
+    showToast('↩ Entry reversed for '+item.name);
+    render();
+  });
 }
 
 /* ══════════════════════════════════════════════════════
    COMMENT ACTIONS
 ══════════════════════════════════════════════════════ */
-function addComment(entryId, text) {
+function addComment(entryId, text, userName) {
   if(!text || !text.trim()) return;
   var key = String(entryId);
   if(!S.comments[key]) S.comments[key] = [];
-  S.comments[key].push({ text: text.trim(), ts: new Date().toISOString(), user: 'Team' });
+  var user = (userName && userName.trim()) ? userName.trim() : 'Team';
+  if(user !== 'Team') S.commentUser = user; // remember last used name
+  S.comments[key].push({ text: text.trim(), ts: new Date().toISOString(), user: user });
   saveAll();
   showToast('💬 Comment added.');
   render();
@@ -1123,9 +1312,10 @@ function addCategory(name) {
   saveAll(); showToast('✅ Category "'+n+'" added.'); render();
 }
 function deleteCategory(name) {
-  if(!confirm('Delete category "'+name+'"? Items using it will keep their current category value.')) return;
-  S.categories = S.categories.filter(function(c){ return c !== name; });
-  saveAll(); showToast('🗑 Category deleted.'); render();
+  showConfirm('Delete Category', 'Delete category "'+name+'"? Items using it will keep their current category value.', function(){
+    S.categories = S.categories.filter(function(c){ return c !== name; });
+    saveAll(); showToast('🗑 Category deleted.'); render();
+  });
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1144,6 +1334,33 @@ function saveEditedBalance(itemId, val) {
     type: 'ADJ', qty: Math.abs(n - old),
     note: '✏️ Manual balance edit: '+old+' → '+n
   }].concat(S.history).slice(0,500);
+
+  // Trigger stock alerts on balance edit (same logic as logMovement)
+  if(alertsRef) {
+    var status = getStatus(n, item.threshold);
+    if(status !== 'OK' && _shouldAlert(itemId, status)) {
+      if(status === 'OUT') {
+        sendStockAlert({
+          type: 'auto_out', status: 'OUT',
+          itemId: itemId, itemName: item.name,
+          balance: n, threshold: item.threshold, unit: item.unit,
+          message: '🚨 OUT OF STOCK: ' + item.name + ' set to 0 ' + item.unit + ' via manual edit.'
+        });
+      } else {
+        sendStockAlert({
+          type: 'auto_low', status: 'LOW',
+          itemId: itemId, itemName: item.name,
+          balance: n, threshold: item.threshold, unit: item.unit,
+          message: '⚠️ LOW STOCK: ' + item.name + ' manually set to ' + n + ' ' + item.unit + ' (minimum: ' + item.threshold + ').'
+        });
+      }
+      _saveAlertedItem(itemId, status);
+    } else if(status === 'OK') {
+      delete _alertedItems[String(itemId)];
+      try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
+    }
+  }
+
   S.editBalId = null; S.editBalVal = '';
   saveAll(); showToast('✏️ Balance updated to '+n+' '+item.unit); render();
 }
@@ -1291,12 +1508,71 @@ function renderIncoming(h) {
 }
 
 /* ══════════════════════════════════════════════════════
+   SVG SPARKLINE — renders a tiny closing-stock line chart
+   for the Reports section.
+══════════════════════════════════════════════════════ */
+function renderSparkline(rows) {
+  if(!rows || rows.length < 2) return '';
+  var W = 480, H = 80, PAD = 8;
+  var vals = rows.map(function(r){ return r.close; });
+  var minV = Math.min.apply(null, vals);
+  var maxV = Math.max.apply(null, vals);
+  var range = maxV - minV || 1;
+  function px(i){ return PAD + (i / (vals.length - 1)) * (W - PAD * 2); }
+  function py(v){ return H - PAD - ((v - minV) / range) * (H - PAD * 2); }
+  var pts = vals.map(function(v,i){ return px(i)+','+py(v); }).join(' ');
+  var fillPts = 'M'+px(0)+','+H+' L'+vals.map(function(v,i){ return px(i)+','+py(v); }).join(' L')+' L'+px(vals.length-1)+','+H+' Z';
+  var lastColor = vals[vals.length-1] <= 0 ? '#e05252' : vals[vals.length-1] < (rows[0].open * 0.5) ? '#e8873a' : '#4ec87a';
+  return '<div style="margin:0 20px 16px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;padding:14px 16px 10px">'
+    +'<div style="font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px">Closing Stock Trend</div>'
+    +'<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:60px;display:block">'
+    +'<defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="'+lastColor+'" stop-opacity="0.22"/><stop offset="100%" stop-color="'+lastColor+'" stop-opacity="0"/></linearGradient></defs>'
+    +'<path d="'+fillPts+'" fill="url(#sg)"/>'
+    +'<polyline points="'+pts+'" fill="none" stroke="'+lastColor+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    +'<circle cx="'+px(vals.length-1)+'" cy="'+py(vals[vals.length-1])+'" r="3.5" fill="'+lastColor+'"/>'
+    +'</svg>'
+    +'<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--cream3);margin-top:4px">'
+    +'<span>'+rows[0].date+'</span><span>'+rows[rows.length-1].date+'</span></div>'
+    +'</div>';
+}
+
+/* ══════════════════════════════════════════════════════
    RENDER
 ══════════════════════════════════════════════════════ */
 function render() {
   var app = document.getElementById('app');
   if(!app || app.style.display === 'none') return;
   var h = '';
+
+  /* OVERLAY: Custom Confirm */
+  if(S.confirmModal) {
+    h += '<div id="overlay"><div class="confirm-modal">'
+      +'<div class="confirm-modal-body">'
+      +'<div class="confirm-modal-title">'+esc(S.confirmModal.title)+'</div>'
+      +'<div class="confirm-modal-msg">'+esc(S.confirmModal.msg)+'</div>'
+      +'</div>'
+      +'<div class="confirm-modal-foot">'
+      +'<button class="btn-confirm-cancel" id="confirmCancel">Cancel</button>'
+      +'<button class="btn-confirm-ok" id="confirmOk">Confirm</button>'
+      +'</div></div></div>';
+  }
+
+  /* OVERLAY: Send Alert to Roastery */
+  if(S.showAlertModal) {
+    h += '<div id="overlay"><div class="modal">'
+      +'<div class="modal-hdr"><div class="modal-icon">📡</div>'
+      +'<div><div class="modal-title">Send Alert to Roastery</div>'
+      +'<div class="modal-sub">Message will be pushed to the roastery in real-time</div></div></div>'
+      +'<div class="modal-body">'
+      +'<label style="display:block;font-size:9px;color:var(--cream3);margin-bottom:6px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600">Your Message</label>'
+      +'<input type="text" id="manualAlertInput" class="modal-login-input" style="font-size:12px;letter-spacing:0" '
+      +'placeholder="e.g. Running low on House Blend — please roast more…" maxlength="280" autocomplete="off">'
+      +'</div>'
+      +'<div class="modal-foot" style="flex-direction:column;gap:8px">'
+      +'<button class="btn-unlock" id="alertSendBtn" style="background:rgba(200,146,60,0.16);border-color:var(--gold)">📡 Send Alert →</button>'
+      +'<button class="btn-cancel" id="alertCloseBtn" style="text-align:center">Cancel</button>'
+      +'</div></div></div>';
+  }
 
   /* OVERLAY: Login */
   if(S.showLogin) {
@@ -1330,7 +1606,7 @@ function render() {
         +'</div>'
         +'<div class="form-row">'
         +'<div class="form-field" style="flex:1 1 140px"><label>Quantity ('+esc(lItem.unit)+')</label>'
-        +'<input type="number" class="inp" id="logQtyInput" value="'+esc(S.logQty)+'" placeholder="0" min="0.01" step="0.01" autocomplete="off"></div>'
+        +'<input type="number" class="inp" id="logQtyInput" value="'+esc(S.logQty)+'" placeholder="0" min="0.01" step="0.01" inputmode="decimal" autocomplete="off"></div>'
         +'<div class="form-field" style="flex:2 1 180px"><label>Note (optional)</label>'
         +'<input type="text" class="inp" id="logNoteInput" value="'+esc(S.logNote)+'" placeholder="Batch #, supplier, reason…" autocomplete="off"></div>'
         +'</div>'
@@ -1367,10 +1643,13 @@ function render() {
     +'<button class="nav-btn '+(S.teamUnlocked?'active-team':'locked-team')+'" id="navTeam">'+(S.teamUnlocked?'✏️':'🔒')+' Team Panel</button>'
     +'</div>'
     +'<div class="h-right">'
+    +'<button class="alert-hdr-btn" id="openAlertModalBtn" title="Send Alert to Roastery">📡 Alert</button>'
     +(S.teamUnlocked?'<button class="lock-btn" id="lockBtn">🔓 Lock</button>':'')
+    +'<span class="h-clock" id="headerClock">'+fmtClock().hm+'</span>'
     +'<div class="live-dot" style="background:'+(sync?'var(--orange)':'var(--green)')+';box-shadow:0 0 6px '+(sync?'var(--orange)':'var(--green)')+';animation:'+(sync?'spin 1s linear infinite':'pulse 2s infinite')+'"></div>'
     +'<span class="live-txt" style="color:'+(sync?'var(--orange)':'var(--green)')+'">'+(sync?'SYNCING':'● LIVE')+'</span>'
     +'<button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>'
+    +'<button class="settings-btn" id="openSettingsBtn" title="Settings">⚙</button>'
     +'</div></div>';
 
   /* PENDING UPDATE BANNER */
@@ -1397,21 +1676,16 @@ function render() {
       : '👁 <strong>Management view</strong> — read-only live data. Updates push to this screen in real time. Your stock team uses 🔒 Team Panel to update stock.')
     +'</div>';
 
-  /* ── FEATURE 2: MANUAL ALERT PANEL ── */
-  h += '<div class="manual-alert-panel">'
-    +'<div class="manual-alert-header">'
-    +'<span class="manual-alert-icon">📡</span>'
-    +'<span class="manual-alert-title">Send Alert to Roastery</span>'
-    +'</div>'
-    +'<div class="manual-alert-body">'
-    +'<input id="manualAlertInput" class="manual-alert-inp" type="text" '
-    +'placeholder="e.g. Running low on House Blend — please roast more…" maxlength="280"/>'
-    +'<button class="manual-alert-btn" onclick="sendManualAlert()">Send ›</button>'
-    +'</div>'
-    +'</div>';
+
 
   /* ── DASHBOARD ── */
   if(S.view === 'dashboard') {
+    // Show skeleton while first load is in progress
+    if(S.syncing && !S.items.length) {
+      h += '<div class="grid" style="margin-top:20px">';
+      for(var sk=0;sk<6;sk++) h += '<div class="card skeleton skel-card"></div>';
+      h += '</div>';
+    } else {
     var cats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
     // Summary cards
     var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
@@ -1465,6 +1739,7 @@ function render() {
       });
       h += '</div>';
     }
+    } // end skeleton else
     if(S.history.length) {
       h += '<div class="section-label">Recent Movements</div>';
       h += '<div class="hist-panel"><div class="hist-head"><span>Movement Log</span><span style="font-size:9px">Last '+Math.min(S.history.length,20)+' records</span></div><div class="hist-scroll">';
@@ -1545,6 +1820,7 @@ function render() {
       +'<div class="rpt-ctrl-group" style="justify-content:flex-end;flex-direction:row;align-items:flex-end;gap:6px">'
       +'<button class="btn-rpt-run" id="rptRunBtn">▶ Generate Report</button>'
       +(S.rptRows&&S.rptRows.length?'<button class="btn-export" id="exportCsvBtn">📥 Export CSV</button>':'')
+      +(S.rptRows&&S.rptRows.length?'<button class="btn-export" id="printRptBtn" style="color:#a0c4e8;border-color:rgba(160,196,232,0.4)">🖨 Print</button>':'')
       +'</div>'
       +'</div>';
 
@@ -1578,6 +1854,8 @@ function render() {
       if(!rows.length) {
         h += '<div class="hist-panel" style="margin:0 20px 20px"><div style="padding:32px;text-align:center;color:var(--cream3);font-size:12px">No movements found for this period.</div></div>';
       } else {
+        // Sparkline chart
+        h += renderSparkline(rows);
         // Daily ledger table
         h += '<div style="overflow-x:auto;margin:0 20px 20px">'
           +'<div class="rpt-table">'
@@ -1624,16 +1902,20 @@ function render() {
       h += '<div class="prov-table"><div class="prov-all-ok">✅ All coffee beans are well-stocked! Nothing to provision right now.</div></div>';
     } else {
       h += '<div style="overflow-x:auto"><div class="prov-table">'
-        +'<div class="prov-hdr"><span>Coffee Bean</span><span>Current</span><span>Min Level</span><span>Deficit</span><span>Suggested Order</span><span>Status</span></div>';
+        +'<div class="prov-hdr"><span>Coffee Bean</span><span>Current</span><span>Min Level</span><span>Deficit</span><span>Avg/Day</span><span>Suggested Order</span><span>Status</span></div>';
       needItems.forEach(function(item){
         var st = getStatus(item.balance,item.threshold), m = SM[st];
         var deficit = Math.max(0, item.threshold - item.balance);
-        var suggested = Math.max(item.threshold * 2, deficit + item.threshold);
+        var daily = avgDailyUsage(item.id);
+        // Smart suggestion: cover deficit + 14 days of usage (or at least threshold*2)
+        var coverDays = daily > 0 ? Math.ceil((deficit + daily * 14)) : Math.max(item.threshold * 2, deficit + item.threshold);
+        var suggested = Math.max(item.threshold * 2, coverDays);
         h += '<div class="prov-row">'
           +'<span class="prov-name">'+esc(item.name)+'<div class="prov-note">'+esc(item.origin)+'</div></span>'
           +'<span style="color:'+m.color+';font-weight:600">'+item.balance+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--cream3)">'+item.threshold+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--red)">'+deficit+' '+esc(item.unit)+'</span>'
+          +'<span style="color:var(--cream3)">'+(daily > 0 ? daily+' '+esc(item.unit) : '—')+'</span>'
           +'<span class="prov-suggest">'+suggested+' '+esc(item.unit)+'</span>'
           +'<span><span class="badge '+m.cls+'">'+m.lbl+'</span></span>'
           +'</div>';
@@ -1694,12 +1976,26 @@ function render() {
       +'</div>';
 
     if(S.showCPwd) {
-      h += '<div class="form-box gold"><div class="form-row">'
-        +'<div class="form-field"><label>Current Password</label><input type="password" class="inp" id="cpOld" value="'+esc(S.cpOld)+'" autocomplete="off"></div>'
-        +'<div class="form-field"><label>New Password</label><input type="password" class="inp" id="cpNew" value="'+esc(S.cpNew)+'" autocomplete="off"></div>'
-        +'<div class="form-field"><label>Confirm New</label><input type="password" class="inp" id="cpConf" value="'+esc(S.cpConf)+'" autocomplete="off"></div>'
-        +'</div>'+(S.cpErr?'<div class="err-txt">'+esc(S.cpErr)+'</div>':'')
-        +'<div class="form-btns"><button class="btn-save" id="cpSave">Save Password</button><button class="btn-cancel" id="cpCancel">Cancel</button></div></div>';
+      h += '<div id="overlay"><div class="pwd-modal">'
+        +'<div class="pwd-modal-hdr">'
+        +'<span style="font-size:24px">🔐</span>'
+        +'<div><div style="font-family:\'Playfair Display\',serif;font-size:17px;color:var(--gold3);font-weight:700">Change Team Password</div>'
+        +'<div style="font-size:10px;color:var(--cream3);margin-top:2px;letter-spacing:0.06em">New password must be at least 6 characters</div>'
+        +'</div></div>'
+        +'<div class="pwd-modal-body">'
+        +'<div class="form-field" style="margin-bottom:12px"><label>Current Password</label>'
+        +'<input type="password" class="inp" id="cpOld" value="'+esc(S.cpOld)+'" autocomplete="new-password" placeholder="Enter current password"></div>'
+        +'<div class="form-field" style="margin-bottom:12px"><label>New Password</label>'
+        +'<input type="password" class="inp" id="cpNew" value="'+esc(S.cpNew)+'" autocomplete="new-password" placeholder="At least 6 characters"></div>'
+        +'<div class="form-field"><label>Confirm New Password</label>'
+        +'<input type="password" class="inp" id="cpConf" value="'+esc(S.cpConf)+'" autocomplete="new-password" placeholder="Repeat new password"></div>'
+        +(S.cpErr?'<div class="err-txt" style="margin-top:10px;font-size:11px">⚠ '+esc(S.cpErr)+'</div>':'')
+        +'</div>'
+        +'<div class="pwd-modal-foot">'
+        +'<button class="btn-save" id="cpSave" style="flex:1;padding:11px">🔑 Update Password</button>'
+        +'<button class="btn-cancel" id="cpCancel" style="padding:11px 18px">Cancel</button>'
+        +'</div>'
+        +'</div></div>';
     }
 
     if(S.showAddItem && S.newItem) {
@@ -1712,9 +2008,9 @@ function render() {
         +S.categories.map(function(c){ return '<option value="'+esc(c)+'"'+(ni.category===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
         +'</select></div>'
         +'<div class="form-field"><label>Origin</label><input class="inp ni-f" data-f="origin" value="'+esc(ni.origin)+'" placeholder="Rwanda 🇷🇼"></div>'
-        +'<div class="form-field" style="flex:0 1 90px"><label>Opening Stock</label><input type="number" class="inp ni-f" data-f="balance" value="'+esc(ni.balance)+'"></div>'
+        +'<div class="form-field" style="flex:0 1 90px"><label>Opening Stock</label><input type="number" class="inp ni-f" data-f="balance" value="'+esc(ni.balance)+'" inputmode="decimal"></div>'
         +'<div class="form-field" style="flex:0 1 70px"><label>Unit</label><input class="inp ni-f" data-f="unit" value="'+esc(ni.unit)+'"></div>'
-        +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ni-f" data-f="threshold" value="'+esc(ni.threshold)+'"></div>'
+        +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ni-f" data-f="threshold" value="'+esc(ni.threshold)+'" inputmode="decimal"></div>'
         +'</div>'
         +'<div class="form-btns"><button class="btn-save" id="niSave" '+(!(ni.name.trim()&&ni.category.trim())?'disabled style="opacity:0.4"':'')+'>Add Bean</button>'
         +'<button class="btn-cancel" id="niCancel">Cancel</button></div></div>';
@@ -1746,7 +2042,7 @@ function render() {
         +' <span style="font-size:9px;color:var(--cream3);font-weight:400">'+esc(item.origin)+'</span></span>'
         +(isEditing
           ? '<span style="text-align:right;display:flex;gap:4px;justify-content:flex-end;align-items:center">'
-            +'<input type="number" class="bal-edit-inp" id="balEditInp_'+item.id+'" value="'+S.editBalVal+'" min="0" step="0.1">'
+            +'<input type="number" class="bal-edit-inp" id="balEditInp_'+item.id+'" value="'+S.editBalVal+'" min="0" step="0.1" inputmode="decimal">'
             +'<button class="btn-save-bal" data-savebal="'+item.id+'">✓</button>'
             +'<button class="btn-cancel" style="padding:3px 6px;font-size:10px" data-cancelbal="'+item.id+'">✕</button></span>'
           : '<span style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:'+m.color+';font-weight:600;display:flex;align-items:center;justify-content:flex-end;gap:5px">'
@@ -1774,8 +2070,17 @@ function render() {
         if(!grouped[day]){ grouped[day]=[]; groupOrder.push(day); }
         grouped[day].push(e);
       });
+      var PAGE_SIZE = 25;
+      var totalShown = S.histPage * PAGE_SIZE;
+      var flatEntries = 0;
+      groupOrder.forEach(function(d){ flatEntries += grouped[d].length; });
+      var hasMore = flatEntries > totalShown;
+
       h += '<div class="hist-panel" style="margin:0 20px 16px"><div class="hist-head"><span>All Movements ('+S.history.length+' total)</span><span style="font-size:9px;color:var(--red)">🗑 = delete that entry permanently</span></div><div class="hist-scroll" style="max-height:340px">';
-      groupOrder.forEach(function(day){
+      var shownSoFar = 0;
+      for(var gi = 0; gi < groupOrder.length; gi++) {
+        var day = groupOrder[gi];
+        if(shownSoFar >= totalShown) break;
         var isToday = day === new Date().toDateString();
         var isYest  = day === new Date(Date.now()-86400000).toDateString();
         var dayLabel = isToday ? 'Today' : isYest ? 'Yesterday' : new Date(day).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
@@ -1784,6 +2089,8 @@ function render() {
           +'<button class="btn-del-day" data-day="'+esc(day)+'" style="font-size:9px;background:rgba(224,82,82,0.08);border:1px solid var(--red-bd);color:var(--red);padding:2px 8px;border-radius:4px;font-weight:700">🗑 Delete '+dayLabel+'</button>'
           +'</div>';
         grouped[day].forEach(function(e){
+          if(shownSoFar >= totalShown) return;
+          shownSoFar++;
           var isIn = e.type==='IN';
           var entryComments = S.comments[String(e.id)] || [];
           var showComments = S.openCommentId === e.id;
@@ -1806,22 +2113,28 @@ function render() {
                   ? entryComments.map(function(c,ci){
                       return '<div class="comment-item">'+esc(c.text)
                         +'<div class="comment-meta">'+new Date(c.ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})
-                        +' · '+esc(c.user)
+                        +' · <strong>'+esc(c.user||'Team')+'</strong>'
                         +' <button style="font-size:9px;color:var(--red);background:none;border:none;cursor:pointer" data-delcomment="'+esc(e.id)+'" data-commentidx="'+ci+'">delete</button></div>'
                         +'</div>';
                     }).join('')
                   : '<div style="font-size:10px;color:var(--cream3);padding:4px 0">No comments yet.</div>'
                 )
                 +'</div>'
-                +'<div class="comment-inp-row">'
-                +'<input class="comment-inp" id="commentInp_'+esc(e.id)+'" placeholder="Add a comment…">'
+                +'<div class="comment-inp-row" style="flex-wrap:wrap;gap:5px">'
+                +'<input class="comment-inp" id="commentUser_'+esc(e.id)+'" placeholder="Your name…" value="'+esc(S.commentUser)+'" style="flex:0 1 100px;min-width:80px">'
+                +'<input class="comment-inp" id="commentInp_'+esc(e.id)+'" placeholder="Add a comment… (Enter to send)">'
                 +'<button class="btn-comment-send" data-sendcomment="'+esc(e.id)+'">Send</button>'
                 +'</div>'
               : ''
             )
             +'</div>';
         });
-      });
+      }
+      if(hasMore) {
+        h += '<div style="padding:12px;text-align:center;border-top:1px solid var(--border)">'
+          +'<button id="histLoadMore" style="background:rgba(200,146,60,0.1);border:1px solid rgba(200,146,60,0.35);color:var(--gold2);padding:7px 22px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">'
+          +'Load More ('+(flatEntries - totalShown)+' remaining)</button></div>';
+      }
       h += '</div></div>';
     }
     h += '<div style="height:1px"></div>'; // spacer
@@ -1829,6 +2142,64 @@ function render() {
 
   h += '<div id="footer">Windmill Cafe & Roastery · Firebase Realtime Sync · Auto-updates pushed live</div>';
   if(S.toast) h += '<div id="toast">'+esc(S.toast)+'</div>';
+
+  /* ── SETTINGS MODAL ──────────────────────────────────────────────────── */
+  if(S.showSettings) {
+    var clk = fmtClock();
+    var themeSwatches = {dark:'linear-gradient(135deg,#1a1208,#c8923c)',light:'linear-gradient(135deg,#f5f0e8,#9a6010)',forest:'linear-gradient(135deg,#101a10,#5ab55a)',ocean:'linear-gradient(135deg,#0c1a28,#5090d8)'};
+    var themeLabels  = {dark:'Dark ☕',light:'Light ☀',forest:'Forest 🌿',ocean:'Ocean 🌊'};
+    h += '<div id="settings-overlay">'
+      +'<div class="settings-panel">'
+      +'<div class="settings-hdr">'
+      +'<div class="settings-title">⚙ Global Settings</div>'
+      +'<button class="btn-cancel" style="font-size:10px;padding:4px 14px" id="closeSettingsBtn">✕ Close</button>'
+      +'</div>'
+      +'<div class="settings-body">'
+
+      /* ── Live Clock ── */
+      +'<div>'
+      +'<div class="settings-sec-lbl">🕐 Current Time</div>'
+      +'<div class="settings-clock" id="settingsClock">'+clk.hm+'<span class="settings-clock-secs">:'+clk.s+'</span></div>'
+      +'<div class="settings-clock-date" id="settingsClockDate">'+clk.date+'</div>'
+      +'</div>'
+
+      /* ── Theme ── */
+      +'<div>'
+      +'<div class="settings-sec-lbl">🎨 UI Theme</div>'
+      +'<div class="theme-grid">'
+      +['dark','light','forest','ocean'].map(function(tid){
+        return '<div class="theme-opt'+(S.theme===tid?' active':'')+'" data-settheme="'+tid+'">'
+          +'<div class="theme-swatch" style="background:'+themeSwatches[tid]+'"></div>'
+          +'<div class="theme-name">'+themeLabels[tid]+'</div>'
+          +'</div>';
+      }).join('')
+      +'</div>'
+      +'</div>'
+
+      /* ── Accent Colour ── */
+      +'<div>'
+      +'<div class="settings-sec-lbl">🌈 Accent Colour</div>'
+      +'<div class="accent-row">'
+      +ACCENT_PRESETS.map(function(p){
+        return '<div class="accent-dot'+(S.accentPreset===p.id?' active':'')+'" title="'+p.label
+          +'" data-setaccent="'+p.id
+          +'" style="background:linear-gradient(135deg,'+p.val+','+p.val3+')"></div>';
+      }).join('')
+      +'<div class="accent-dot'+(S.accentPreset===''?' active':'')+'" title="Reset default" data-setaccent="" '
+      +'style="background:var(--border2);font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--cream3);">↺</div>'
+      +'<span style="font-size:10px;color:var(--cream3);margin-left:4px">↺ resets to default</span>'
+      +'</div>'
+      +'</div>'
+
+      /* ── Info ── */
+      +'<div style="padding:12px 16px;background:var(--bg2);border-radius:10px;border:1px solid var(--border);font-size:10px;color:var(--cream3);line-height:1.7">'
+      +'<strong style="color:var(--gold2)">Windmill Cafe & Roastery</strong><br>'
+      +'Firebase Realtime Sync · Theme & accent saved to this browser.'
+      +'</div>'
+
+      +'</div>' /* end .settings-body */
+      +'</div></div>'; /* end .settings-panel + #settings-overlay */
+  }
 
   app.innerHTML = h;
   bindEvents();
@@ -1840,13 +2211,24 @@ function render() {
 function bindEvents() {
   function g(id) { return document.getElementById(id); }
 
+  /* Custom confirm modal */
+  var cok=g('confirmOk');
+  if(cok) cok.onclick=function(){
+    var cb=S.confirmModal&&S.confirmModal.onOk;
+    S.confirmModal=null;
+    if(cb) cb();
+    else render();
+  };
+  var ccan2=g('confirmCancel');
+  if(ccan2) ccan2.onclick=function(){ S.confirmModal=null; render(); };
+
   var nd=g('navDash'); if(nd) nd.onclick=function(){ S.view='dashboard'; render(); };
   var nb=g('navBal');  if(nb) nb.onclick=function(){ S.view='balance'; render(); };
   var nr=g('navRpt');  if(nr) nr.onclick=function(){ S.view='report'; if(!S.rptFrom){ var dr=defaultDateRange(); S.rptFrom=dr.from; S.rptTo=dr.to; } render(); };
   var np=g('navProv'); if(np) np.onclick=function(){ S.view='provision'; render(); };
   var ni=g('navIncoming'); if(ni) ni.onclick=function(){ S.view='incoming'; render(); };
   var nt=g('navTeam'); if(nt) nt.onclick=function(){
-    if(S.teamUnlocked){ S.view='team'; render(); }
+    if(S.teamUnlocked){ S.view='team'; S.histPage=1; render(); }
     else { S.showLogin=true; render(); setTimeout(function(){ var e=g('loginInput'); if(e)e.focus(); },60); }
   };
   var lb=g('lockBtn');  if(lb) lb.onclick=doLock;
@@ -1858,12 +2240,18 @@ function bindEvents() {
   });
   var si=g('searchInput'); if(si) si.oninput=function(){ S.search=this.value; render(); };
 
+  /* Alert Modal */
+  var oam=g('openAlertModalBtn'); if(oam) oam.onclick=function(){ S.showAlertModal=true; render(); setTimeout(function(){ var ai=g('manualAlertInput'); if(ai) ai.focus(); },60); };
+  var aclz=g('alertCloseBtn');    if(aclz) aclz.onclick=function(){ S.showAlertModal=false; render(); };
+  var asnd=g('alertSendBtn');     if(asnd) asnd.onclick=sendManualAlert;
+  var mai=g('manualAlertInput');  if(mai) mai.onkeydown=function(e){ if(e.key==='Enter') sendManualAlert(); };
+
   /* Login */
   var li=g('loginInput');
   if(li){ li.oninput=function(){ S.loginErr=false; }; li.onkeydown=function(e){ if(e.key==='Enter') doLogin(); }; }
   var lbtn=g('loginBtn');   if(lbtn) lbtn.onclick=doLogin;
   var lc=g('loginClose');   if(lc)   lc.onclick=function(){ S.showLogin=false; S.loginErr=false; render(); };
-  var ov=g('overlay'); if(ov) ov.onclick=function(e){ if(e.target===ov){ S.showLogin=false; S.logModal=null; S.loginErr=false; render(); } };
+  var ov=g('overlay'); if(ov) ov.onclick=function(e){ if(e.target===ov){ S.showLogin=false; S.showAlertModal=false; S.logModal=null; S.loginErr=false; S.confirmModal=null; S.showCPwd=false; S.cpOld=S.cpNew=S.cpConf=S.cpErr=''; render(); } };
 
   /* Log modal */
   var ti=g('typeIn');    if(ti) ti.onclick=function(){ S.logType='IN';    render(); };
@@ -1928,6 +2316,9 @@ function bindEvents() {
   document.querySelectorAll('[data-revid]').forEach(function(b){
     b.onclick=function(){ reverseEntry(this.getAttribute('data-revid')); };
   });
+
+  /* History — load more */
+  var hlm=g('histLoadMore'); if(hlm) hlm.onclick=function(){ S.histPage++; render(); };
 
   /* Delete single history entry */
   document.querySelectorAll('[data-entryid]').forEach(function(b){
@@ -2023,7 +2414,9 @@ function bindEvents() {
     b.onclick=function(){
       var id=this.getAttribute('data-sendcomment');
       var inp=document.getElementById('commentInp_'+id);
-      if(inp&&inp.value.trim()) addComment(id,inp.value);
+      var userInp=document.getElementById('commentUser_'+id);
+      var userName=userInp?userInp.value:'';
+      if(inp&&inp.value.trim()) addComment(id,inp.value,userName);
     };
   });
   document.querySelectorAll('[data-delcomment]').forEach(function(b){
@@ -2035,9 +2428,11 @@ function bindEvents() {
   });
   document.querySelectorAll('.comment-inp').forEach(function(inp){
     inp.onkeydown=function(e){
-      if(e.key==='Enter'){
+      if(e.key==='Enter' && !this.id.startsWith('commentUser_')){
         var id=this.id.replace('commentInp_','');
-        if(this.value.trim()) addComment(id,this.value);
+        var userInp=document.getElementById('commentUser_'+id);
+        var userName=userInp?userInp.value:'';
+        if(this.value.trim()) addComment(id,this.value,userName);
       }
     };
   });
@@ -2068,6 +2463,8 @@ function bindEvents() {
   });
   // Export CSV
   var ecb=g('exportCsvBtn'); if(ecb) ecb.onclick=exportCSV;
+  var prb=g('printRptBtn');
+  if(prb) prb.onclick=function(){ window.print(); };
   var cpr=g('copyRptBtn');
   if(cpr) cpr.onclick=function(){
     if(!S.rptRows||!S.rptRows.length){ showToast('No data to copy.'); return; }
@@ -2087,6 +2484,25 @@ function bindEvents() {
     lines.push('','SUMMARY','Total IN: '+totIn+' | Total OUT: '+totOut+' | Total Waste: '+totWaste+' | Opening: '+S.rptRows[0].open+' | Closing: '+S.rptRows[S.rptRows.length-1].close);
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Report copied to clipboard!'); });
   };
+  /* ── Settings panel ─────────────────────────────────────────────── */
+  var osb=g('openSettingsBtn'); if(osb) osb.onclick=function(){ S.showSettings=true; render(); };
+  var csb=g('closeSettingsBtn'); if(csb) csb.onclick=function(){ S.showSettings=false; render(); };
+  document.querySelectorAll('[data-settheme]').forEach(function(b){
+    b.onclick=function(){
+      S.theme=this.getAttribute('data-settheme');
+      applyTheme(); render();
+    };
+  });
+  document.querySelectorAll('[data-setaccent]').forEach(function(b){
+    b.onclick=function(){
+      var id=this.getAttribute('data-setaccent');
+      if(id==='') resetAccent();
+      else { S.accentPreset=id; applyAccent(); }
+      render();
+    };
+  });
+  var sov=g('settings-overlay'); if(sov) sov.onclick=function(e){ if(e.target===sov){ S.showSettings=false; render(); } };
+
   var cpb=g('copyProvBtn'); if(cpb) cpb.onclick=function(){
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
     var lines = ['Windmill Cafe & Roastery — Purchase Order', new Date().toLocaleDateString(), ''];
@@ -2102,8 +2518,24 @@ function bindEvents() {
 /* ══════════════════════════════════════════════════════
    BOOT — called after Firebase connects
 ══════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   LIVE CLOCK — updates every second without re-rendering
+══════════════════════════════════════════════════════ */
+function startClock() {
+  setInterval(function() {
+    var clk = fmtClock();
+    var hc = document.getElementById('headerClock');
+    if(hc) hc.textContent = clk.hm;
+    var sc = document.getElementById('settingsClock');
+    if(sc) sc.innerHTML = clk.hm + '<span class="settings-clock-secs">:'+clk.s+'</span>';
+    var sd = document.getElementById('settingsClockDate');
+    if(sd) sd.textContent = clk.date;
+  }, 1000);
+}
+
 function bootApp() {
   S.syncing = true;
+  applyTheme(); // restore saved theme on load
   _loadAlertedItems(); // restore de-dup tracker from localStorage
 
   fbRef.once('value', function(snap) {
@@ -2120,6 +2552,7 @@ function bootApp() {
     S.syncing = false;
     S.lastSync = new Date();
     render();
+    startClock(); // start live clock after first render
 
     // Scan all items on first load — send alerts for anything already LOW or OUT
     setTimeout(scanAndSendAlerts, 1500);
