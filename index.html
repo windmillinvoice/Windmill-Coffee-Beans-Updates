@@ -6,7 +6,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Windmill Cafe & Roastery — Live Stock Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <!-- Firebase Realtime Database — free, no server needed -->
 
 
@@ -123,7 +123,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .prov-row span{font-size:12px;font-family:'JetBrains Mono',monospace;text-align:right;}
 .prov-name{font-family:'Barlow Condensed',sans-serif!important;text-align:left!important;color:var(--cream);font-weight:600;font-size:13px;}
 .prov-suggest{color:var(--gold2);font-weight:600;}
-.prov-note{font-size:10px;color:var(--cream3);margin-top:2px;font-family:'Barlow Condensed',sans-serif;font-style:italic;}
+.prov-note{font-size:10px;color:var(--cream3);margin-top:2px;font-family:'Barlow Condensed',sans-serif;font-weight:400;}
 .btn-copy-prov{background:rgba(200,146,60,0.1);border:1px solid rgba(200,146,60,0.3);color:var(--gold2);padding:6px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
 .prov-all-ok{padding:48px 20px;text-align:center;color:var(--green);font-size:13px;}
 .btn-clrhist{background:rgba(224,82,82,0.1);border:1px solid var(--red-bd);color:var(--red);padding:7px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
@@ -158,13 +158,15 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .search-input:focus{border-color:var(--gold);}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:0 20px 20px;}
-.card{background:var(--surf);border:1px solid var(--border2);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:9px;animation:popin 0.35s ease;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;min-height:165px;}
-.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.35);}
+.card{position:relative;background:linear-gradient(155deg,var(--surf) 0%,var(--bg2) 100%);border:1px solid var(--border2);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:9px;animation:popin 0.35s ease;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;min-height:165px;overflow:hidden;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(200,146,60,0.45),transparent);opacity:0;transition:opacity 0.2s;}
+.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.4);border-color:var(--gold2);}
+.card:hover::before{opacity:1;}
 .card.flash{animation:flashbg 1s ease;}
 .card-top{display:flex;justify-content:space-between;align-items:flex-start;}
 .card-name{font-family:'Playfair Display',serif;font-size:14px;color:var(--cream);font-weight:600;line-height:1.2;}
 .card-cat{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px;}
-.badge{font-size:8px;font-weight:700;padding:3px 8px;border-radius:4px;border:1px solid;letter-spacing:0.07em;flex-shrink:0;margin-left:6px;}
+.badge{font-size:8px;font-weight:700;padding:3px 8px;border-radius:5px;border:1px solid;letter-spacing:0.07em;flex-shrink:0;margin-left:6px;}
 .badge-ok{background:var(--green-bg);color:var(--green);border-color:var(--green-bd);}
 .badge-low{background:var(--orng-bg);color:var(--orange);border-color:var(--orng-bd);}
 .badge-out{background:var(--red-bg);color:var(--red);border-color:var(--red-bd);}
@@ -174,7 +176,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .card-moves{display:flex;justify-content:space-between;font-size:10px;font-weight:600;}
 .move-in{color:var(--green);}
 .move-out{color:var(--red);}
-.bar-wrap{height:4px;background:var(--border2);border-radius:3px;overflow:hidden;}
+.bar-wrap{height:5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:3px;transition:width 0.6s ease;}
 .card-min{font-size:9px;color:var(--cream3);letter-spacing:0.06em;}
 
@@ -191,7 +193,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .hist-type-in{color:var(--green);font-weight:700;min-width:16px;}
 .hist-type-out{color:var(--red);font-weight:700;min-width:16px;}
 .hist-qty{font-family:'JetBrains Mono',monospace;font-size:11px;min-width:55px;}
-.hist-note{color:var(--cream3);font-size:10px;font-style:italic;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hist-note{color:var(--cream3);font-size:10px;font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
 .bal-wrap{margin:0 20px 20px;background:var(--surf);border:1px solid var(--border2);border-radius:12px;overflow:hidden;overflow-x:auto;}
 .bal-hdr{display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr 1.1fr;padding:9px 16px;background:var(--bg2);border-bottom:1px solid var(--border);min-width:360px;}
@@ -342,12 +344,357 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .settings-clock-date{font-size:11px;color:var(--cream3);text-align:center;margin-top:6px;letter-spacing:0.12em;text-transform:uppercase;}
 .settings-clock-secs{font-size:22px;color:var(--gold2);opacity:0.7;margin-left:2px;}
 .h-clock{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cream3);letter-spacing:0.06em;white-space:nowrap;padding:4px 10px;border:1px solid var(--border);border-radius:5px;background:var(--bg2);}
-.settings-btn{background:transparent;border:1px solid var(--border2);color:var(--cream3);width:28px;height:28px;border-radius:5px;font-size:15px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;}
+.settings-btn{background:transparent;border:1px solid var(--border2);color:var(--cream3);min-width:28px;height:28px;padding:0 6px;border-radius:5px;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;gap:1px;white-space:nowrap;}
 .settings-btn:hover{border-color:var(--gold);color:var(--gold2);}
 .pwd-modal{background:var(--surf);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:400px;animation:popin 0.24s ease;overflow:hidden;}
 .pwd-modal-hdr{padding:18px 22px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
 .pwd-modal-body{padding:20px 22px;}
 .pwd-modal-foot{padding:12px 22px 18px;display:flex;gap:8px;}
+
+/* ══════════════════════════════════════════════════════
+   ENHANCED RECENT MOVEMENTS — period tabs, search, CSV
+══════════════════════════════════════════════════════ */
+.mov-panel{margin:0 20px 20px;background:linear-gradient(180deg,var(--surf) 0%,var(--bg2) 100%);border:1px solid var(--border2);border-radius:14px;overflow:hidden;}
+.mov-head{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+.mov-head-left{display:flex;align-items:center;gap:10px;}
+.mov-head-icon{width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,rgba(200,146,60,.18),rgba(245,204,130,.08));display:flex;align-items:center;justify-content:center;font-size:14px;}
+.mov-head-title{font-family:'Playfair Display',serif;font-size:15px;color:var(--gold3);font-weight:700;letter-spacing:.02em;}
+.mov-head-sub{font-size:9px;color:var(--cream3);letter-spacing:.16em;text-transform:uppercase;font-weight:600;margin-top:1px;}
+.mov-tabs{display:flex;gap:4px;padding:10px 18px 8px;border-bottom:1px solid var(--border);background:var(--bg2);overflow-x:auto;}
+.mov-tab{padding:6px 14px;border:1px solid var(--border2);border-radius:18px;background:transparent;color:var(--cream3);font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:all .18s;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+.mov-tab:hover{border-color:var(--gold2);color:var(--gold2);}
+.mov-tab.active{background:linear-gradient(135deg,rgba(200,146,60,.18),rgba(245,204,130,.06));border-color:var(--gold);color:var(--gold3);box-shadow:0 0 0 1px rgba(200,146,60,.18) inset;}
+.mov-tab-count{background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:1px 7px;font-size:9px;font-family:'JetBrains Mono',monospace;color:var(--cream2);min-width:18px;text-align:center;}
+.mov-tab.active .mov-tab-count{background:rgba(200,146,60,.14);border-color:rgba(200,146,60,.4);color:var(--gold3);}
+.mov-toolbar{display:flex;gap:8px;padding:10px 18px;align-items:center;flex-wrap:wrap;background:var(--bg2);border-bottom:1px solid var(--border);}
+.mov-search{flex:1 1 180px;background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--cream);font-size:11px;padding:7px 12px 7px 30px;outline:none;font-family:'Barlow Condensed',sans-serif;transition:border .15s;min-width:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238a7050' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:10px center;}
+.mov-search:focus{border-color:var(--gold);}
+.mov-search::placeholder{color:var(--cream3);opacity:.7;}
+.mov-filter{background:var(--bg);border:1px solid var(--border2);border-radius:8px;color:var(--cream);font-size:11px;padding:7px 10px;outline:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;}
+.mov-filter:focus{border-color:var(--gold);}
+.mov-csv-btn{background:linear-gradient(135deg,rgba(96,168,216,.16),rgba(96,168,216,.08));border:1px solid rgba(96,168,216,.4);color:#7cc4f0;padding:7px 14px;border-radius:8px;font-size:10px;font-weight:700;letter-spacing:.08em;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap;}
+.mov-csv-btn:hover{background:linear-gradient(135deg,rgba(96,168,216,.26),rgba(96,168,216,.14));transform:translateY(-1px);}
+.mov-csv-btn:active{transform:translateY(0);}
+.mov-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 18px;background:var(--bg2);border-bottom:1px solid var(--border);}
+.mov-stat{background:var(--surf);border:1px solid var(--border);border-radius:9px;padding:9px 10px;text-align:center;}
+.mov-stat-lbl{font-size:8px;color:var(--cream3);letter-spacing:.16em;text-transform:uppercase;font-weight:700;margin-bottom:3px;}
+.mov-stat-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;line-height:1;}
+.mov-stat-unit{font-size:9px;color:var(--cream3);margin-left:2px;}
+.mov-day-group{padding:0;}
+.mov-day-hdr{padding:8px 18px;background:var(--bg2);border-bottom:1px solid var(--border);font-size:9px;color:var(--gold2);letter-spacing:.18em;text-transform:uppercase;font-weight:700;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:2;}
+.mov-day-hdr-right{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream3);font-weight:500;letter-spacing:.04em;}
+.mov-empty{padding:42px 20px;text-align:center;color:var(--cream3);font-size:11px;line-height:1.7;}
+.mov-empty-icon{font-size:28px;opacity:.4;margin-bottom:10px;display:block;}
+.mov-list{max-height:420px;overflow-y:auto;}
+
+/* ══════════════════════════════════════════════════════
+   PREMIUM ALERT SYSTEM
+══════════════════════════════════════════════════════ */
+.alerts-shelf{margin:14px 20px 4px;background:linear-gradient(135deg,rgba(224,82,82,.08) 0%,rgba(232,135,58,.05) 100%);border:1px solid rgba(224,82,82,.25);border-radius:14px;overflow:hidden;animation:fadein .3s ease;}
+.alerts-shelf.no-alerts{background:linear-gradient(135deg,rgba(78,200,122,.06) 0%,rgba(78,200,122,.02) 100%);border-color:rgba(78,200,122,.22);}
+.alerts-shelf-hdr{padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(224,82,82,.15);flex-wrap:wrap;gap:8px;}
+.alerts-shelf.no-alerts .alerts-shelf-hdr{border-bottom-color:rgba(78,200,122,.15);}
+.alerts-shelf-title{font-family:'Playfair Display',serif;font-size:14px;font-weight:700;color:var(--red);display:flex;align-items:center;gap:8px;}
+.alerts-shelf.no-alerts .alerts-shelf-title{color:var(--green);}
+.alerts-pulse{width:8px;height:8px;border-radius:50%;background:var(--red);animation:pulse 1.4s infinite;box-shadow:0 0 8px var(--red);}
+.alerts-shelf.no-alerts .alerts-pulse{background:var(--green);box-shadow:0 0 8px var(--green);animation:none;}
+.alerts-shelf-meta{font-size:9px;color:var(--cream3);letter-spacing:.14em;text-transform:uppercase;font-weight:600;}
+.alerts-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px;padding:10px;}
+.alert-card{background:var(--surf);border-left:3px solid var(--red);border-radius:9px;padding:10px 12px;display:flex;align-items:center;gap:10px;transition:all .18s;cursor:default;position:relative;overflow:hidden;}
+.alert-card.warn{border-left-color:var(--orange);}
+.alert-card:hover{transform:translateX(2px);background:var(--surf2);}
+.alert-card-icon{font-size:18px;flex-shrink:0;width:32px;height:32px;border-radius:8px;background:rgba(224,82,82,.12);display:flex;align-items:center;justify-content:center;}
+.alert-card.warn .alert-card-icon{background:rgba(232,135,58,.12);}
+.alert-card-body{flex:1;min-width:0;}
+.alert-card-name{font-size:12px;color:var(--cream);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.alert-card-detail{font-size:10px;color:var(--cream3);margin-top:2px;font-family:'JetBrains Mono',monospace;}
+.alert-card-bal{color:var(--red);font-weight:700;}
+.alert-card.warn .alert-card-bal{color:var(--orange);}
+.alert-card-days{font-size:9px;color:var(--cream3);letter-spacing:.08em;margin-top:2px;}
+.alert-shelf-allgood{padding:14px 16px;text-align:center;font-size:11px;color:var(--green);font-weight:600;letter-spacing:.06em;}
+
+/* ── Alert popup modal (replaces inline shelf) ── */
+#alerts-popup{position:fixed;inset:0;background:rgba(8,5,2,0.84);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:600;padding:20px;animation:fadein .2s ease;}
+.alerts-popup-panel{background:linear-gradient(180deg,var(--surf) 0%,var(--bg2) 100%);border:1px solid rgba(224,82,82,.4);border-radius:16px;width:100%;max-width:640px;max-height:84vh;display:flex;flex-direction:column;animation:popin .28s ease;box-shadow:0 30px 80px rgba(0,0,0,.7),0 0 60px rgba(224,82,82,.18);overflow:hidden;}
+.alerts-popup-panel.no-alerts{border-color:rgba(78,200,122,.4);box-shadow:0 30px 80px rgba(0,0,0,.7),0 0 40px rgba(78,200,122,.14);}
+.alerts-popup-hdr{padding:18px 22px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(224,82,82,.2);background:linear-gradient(135deg,rgba(224,82,82,.08),transparent);flex-wrap:wrap;gap:10px;}
+.alerts-popup-panel.no-alerts .alerts-popup-hdr{border-bottom-color:rgba(78,200,122,.2);background:linear-gradient(135deg,rgba(78,200,122,.06),transparent);}
+.alerts-popup-title-wrap{display:flex;align-items:center;gap:12px;flex:1;min-width:0;}
+.alerts-popup-icon{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--red),#c43838);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;box-shadow:0 4px 14px rgba(224,82,82,.4);}
+.alerts-popup-panel.no-alerts .alerts-popup-icon{background:linear-gradient(135deg,var(--green),#2fa05c);box-shadow:0 4px 14px rgba(78,200,122,.4);}
+.alerts-popup-text{flex:1;min-width:0;}
+.alerts-popup-title{font-family:'Playfair Display',serif;font-size:18px;font-weight:700;color:var(--red);line-height:1.1;}
+.alerts-popup-panel.no-alerts .alerts-popup-title{color:var(--green);}
+.alerts-popup-sub{font-size:10px;color:var(--cream3);letter-spacing:.16em;text-transform:uppercase;font-weight:600;margin-top:3px;}
+.alerts-popup-body{padding:14px 18px;overflow-y:auto;flex:1;}
+.alerts-popup-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--bg2);flex-wrap:wrap;}
+.alerts-popup-foot-meta{font-size:10px;color:var(--cream3);}
+.alerts-popup-empty{padding:30px 20px;text-align:center;color:var(--green);font-size:13px;line-height:1.7;}
+
+/* Header alert badge button — always visible when alerts exist */
+.alert-badge-btn{position:relative;background:linear-gradient(135deg,rgba(224,82,82,.18),rgba(232,135,58,.1));border:1px solid rgba(224,82,82,.5);color:#f5b8b8;font-size:11px;font-weight:700;letter-spacing:.06em;padding:6px 12px 6px 32px;border-radius:7px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:5px;}
+.alert-badge-btn::before{content:'';position:absolute;left:11px;top:50%;transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);animation:pulse 1.4s infinite;}
+.alert-badge-btn:hover{background:linear-gradient(135deg,rgba(224,82,82,.28),rgba(232,135,58,.18));transform:translateY(-1px);}
+.alert-badge-count{background:rgba(0,0,0,.3);border-radius:10px;padding:1px 7px;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;}
+
+/* ── Settings login overlay (separate from team-panel login) ── */
+#settings-login{position:fixed;inset:0;background:rgba(8,5,2,0.86);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:550;padding:20px;animation:fadein .2s ease;}
+.s-login-panel{background:linear-gradient(180deg,var(--surf) 0%,var(--bg2) 100%);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:420px;animation:popin .28s ease;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.7),0 0 60px rgba(200,146,60,.12);}
+.s-login-hdr{padding:22px 24px 16px;text-align:center;background:linear-gradient(135deg,rgba(200,146,60,.08),transparent);border-bottom:1px solid var(--border);}
+.s-login-icon-wrap{width:56px;height:56px;border-radius:14px;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--bg);margin:0 auto 10px;box-shadow:0 6px 20px rgba(200,146,60,.4);animation:s-login-bob 3s ease-in-out infinite;}
+@keyframes s-login-bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
+.s-login-title{font-family:'Playfair Display',serif;font-size:19px;color:var(--gold3);font-weight:700;line-height:1.1;}
+.s-login-sub{font-size:10px;color:var(--cream3);letter-spacing:0.18em;text-transform:uppercase;font-weight:600;margin-top:6px;}
+.s-login-body{padding:20px 24px;}
+.s-login-label{display:block;font-size:9px;color:var(--cream3);margin-bottom:7px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;}
+.s-login-input{width:100%;background:var(--bg);border:1px solid var(--border2);border-radius:9px;color:var(--cream);font-size:14px;padding:12px 14px;outline:none;font-family:'JetBrains Mono',monospace;letter-spacing:0.06em;transition:border .15s,box-shadow .15s;}
+.s-login-input:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(200,146,60,.12);}
+.s-login-input.err{border-color:var(--red);box-shadow:0 0 0 3px rgba(224,82,82,.15);}
+.s-login-err{color:var(--red);font-size:11px;margin-top:8px;font-weight:600;text-align:center;animation:fadein .2s ease;}
+.s-login-foot{padding:6px 24px 22px;display:flex;flex-direction:column;gap:8px;}
+.s-login-btn{background:linear-gradient(135deg,var(--gold),var(--gold2));border:none;color:var(--bg);font-family:'Playfair Display',serif;font-size:14px;font-weight:700;padding:12px;border-radius:9px;letter-spacing:0.04em;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(200,146,60,.3);}
+.s-login-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(200,146,60,.45);}
+.s-login-btn:active{transform:translateY(0);}
+.s-login-cancel{background:transparent;border:1px solid var(--border2);color:var(--cream3);font-size:11px;font-weight:600;padding:9px;border-radius:8px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;font-family:inherit;transition:all .15s;}
+.s-login-cancel:hover{color:var(--cream);border-color:var(--cream3);}
+.s-login-hint{font-size:10px;color:var(--cream3);text-align:center;margin-top:10px;line-height:1.6;}
+.s-login-hint strong{color:var(--gold2);}
+
+/* ══════════════════════════════════════════════════════
+   PREMIUM SETTINGS — modern, sectioned, beautiful
+══════════════════════════════════════════════════════ */
+.settings-panel.premium{max-width:640px;background:linear-gradient(180deg,var(--surf) 0%,var(--bg2) 100%);border:1px solid var(--border2);box-shadow:0 30px 80px rgba(0,0,0,.6);}
+.settings-hdr.premium{padding:22px 26px 18px;background:linear-gradient(135deg,rgba(200,146,60,.06),transparent);position:relative;}
+.settings-hdr.premium::after{content:'';position:absolute;left:26px;right:26px;bottom:0;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);}
+.settings-hdr-flex{display:flex;align-items:center;gap:14px;flex:1;}
+.settings-hdr-icon{width:42px;height:42px;border-radius:11px;background:linear-gradient(135deg,var(--gold),var(--gold2));display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--bg);box-shadow:0 4px 18px rgba(200,146,60,.35);}
+.settings-hdr-text{flex:1;}
+.settings-title-premium{font-family:'Playfair Display',serif;font-size:20px;color:var(--gold3);font-weight:700;line-height:1.1;}
+.settings-subtitle{font-size:10px;color:var(--cream3);letter-spacing:.18em;text-transform:uppercase;font-weight:600;margin-top:3px;}
+.settings-tabs{display:flex;gap:0;padding:0 26px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;}
+.settings-tab{padding:10px 14px;border:none;background:none;color:var(--cream3);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;display:flex;align-items:center;gap:6px;font-family:inherit;}
+.settings-tab:hover{color:var(--cream);}
+.settings-tab.active{color:var(--gold3);border-bottom-color:var(--gold);}
+.settings-tab-icon{font-size:14px;}
+.settings-body.premium{padding:22px 26px 26px;display:flex;flex-direction:column;gap:18px;max-height:64vh;overflow-y:auto;}
+.settings-card{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:14px 16px;transition:border-color .15s;}
+.settings-card:hover{border-color:var(--border2);}
+.settings-card-title{font-size:11px;color:var(--gold2);font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.settings-card-icon{font-size:14px;}
+.settings-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px dashed var(--border);gap:12px;}
+.settings-row:last-child{border-bottom:none;}
+.settings-row-label{flex:1;}
+.settings-row-name{font-size:12px;color:var(--cream);font-weight:600;}
+.settings-row-desc{font-size:10px;color:var(--cream3);margin-top:2px;line-height:1.5;}
+.settings-toggle{position:relative;width:42px;height:23px;background:var(--bg);border:1px solid var(--border2);border-radius:14px;cursor:pointer;transition:all .2s;flex-shrink:0;}
+.settings-toggle::after{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--cream3);transition:all .2s;}
+.settings-toggle.on{background:linear-gradient(135deg,rgba(200,146,60,.3),rgba(245,204,130,.15));border-color:var(--gold);}
+.settings-toggle.on::after{left:21px;background:var(--gold3);box-shadow:0 0 8px rgba(245,204,130,.5);}
+.settings-num-inp{background:var(--bg);border:1px solid var(--border2);border-radius:7px;color:var(--cream);font-size:12px;padding:6px 10px;outline:none;width:80px;font-family:'JetBrains Mono',monospace;text-align:right;}
+.settings-num-inp:focus{border-color:var(--gold);}
+.settings-mini-btn{background:rgba(200,146,60,.1);border:1px solid rgba(200,146,60,.35);color:var(--gold2);padding:6px 12px;border-radius:7px;font-size:10px;font-weight:700;letter-spacing:.06em;cursor:pointer;font-family:inherit;transition:all .15s;}
+.settings-mini-btn:hover{background:rgba(200,146,60,.2);}
+.settings-clock.premium{font-size:46px;background:linear-gradient(135deg,var(--bg) 0%,var(--bg2) 100%);border:1px solid var(--border2);box-shadow:inset 0 1px 0 rgba(255,255,255,.02);padding:18px;}
+.settings-clock-secs.premium{color:var(--gold);}
+.theme-grid.premium{gap:10px;}
+.theme-opt.premium{padding:12px 6px 9px;border-radius:11px;}
+.theme-opt.premium .theme-swatch{width:42px;height:42px;}
+.about-card{background:linear-gradient(135deg,rgba(200,146,60,.08) 0%,rgba(245,204,130,.02) 100%);border:1px solid rgba(200,146,60,.2);border-radius:12px;padding:16px;text-align:center;}
+.about-card-logo{font-size:30px;margin-bottom:6px;}
+.about-card-name{font-family:'Playfair Display',serif;font-size:16px;color:var(--gold3);font-weight:700;}
+.about-card-tag{font-size:10px;color:var(--cream3);letter-spacing:.18em;text-transform:uppercase;font-weight:600;margin-top:3px;}
+.about-card-meta{font-size:10px;color:var(--cream2);margin-top:10px;line-height:1.7;}
+.danger-card{background:rgba(224,82,82,.05);border:1px solid var(--red-bd);border-radius:12px;padding:14px 16px;}
+.danger-card-title{font-size:11px;color:var(--red);font-weight:700;letter-spacing:.14em;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+.btn-danger{background:rgba(224,82,82,.1);border:1px solid var(--red-bd);color:var(--red);padding:8px 14px;border-radius:7px;font-size:10px;font-weight:700;letter-spacing:.08em;cursor:pointer;font-family:inherit;}
+.btn-danger:hover{background:rgba(224,82,82,.18);}
+
+/* ══════════════════════════════════════════════════════
+   NEW FEATURES — Usage Insights, Team Updates,
+   Snapshots, Activity Filter, Data Portability
+══════════════════════════════════════════════════════ */
+/* ── Hero KPI tiles (top of dashboard) ── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:14px 20px 0;}
+.kpi-tile{position:relative;background:linear-gradient(135deg,var(--surf) 0%,var(--bg2) 100%);border:1px solid var(--border2);border-radius:14px;padding:14px 16px;overflow:hidden;transition:transform .2s ease,border-color .2s ease;}
+.kpi-tile:hover{transform:translateY(-1px);border-color:var(--gold2);}
+.kpi-tile::before{content:'';position:absolute;inset:0;border-radius:14px;background:linear-gradient(135deg,rgba(200,146,60,.05),transparent 60%);pointer-events:none;}
+.kpi-tile.kpi-warn{border-color:rgba(232,135,58,.4);background:linear-gradient(135deg,var(--surf),rgba(232,135,58,.04));}
+.kpi-tile.kpi-warn::before{background:linear-gradient(135deg,rgba(232,135,58,.08),transparent 70%);}
+.kpi-tile.kpi-crit{border-color:rgba(224,82,82,.4);background:linear-gradient(135deg,var(--surf),rgba(224,82,82,.04));}
+.kpi-tile.kpi-crit::before{background:linear-gradient(135deg,rgba(224,82,82,.08),transparent 70%);}
+.kpi-tile.kpi-good{border-color:rgba(78,200,122,.35);background:linear-gradient(135deg,var(--surf),rgba(78,200,122,.04));}
+.kpi-tile.kpi-good::before{background:linear-gradient(135deg,rgba(78,200,122,.08),transparent 70%);}
+.kpi-row-top{display:flex;align-items:center;gap:8px;margin-bottom:6px;position:relative;z-index:1;}
+.kpi-icon{font-size:18px;line-height:1;filter:drop-shadow(0 0 6px rgba(200,146,60,.25));}
+.kpi-lbl{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.16em;font-weight:700;}
+.kpi-val{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:600;line-height:1;letter-spacing:-0.02em;position:relative;z-index:1;}
+.kpi-sub{font-size:9px;color:var(--cream3);margin-top:6px;letter-spacing:0.1em;position:relative;z-index:1;}
+.kpi-pulse-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:pulse 2s infinite;margin-right:5px;vertical-align:middle;}
+
+/* ── Usage Insights — main card ── */
+.usage-card{margin:14px 20px 0;background:linear-gradient(180deg,var(--surf),var(--bg2));border:1px solid var(--border2);border-radius:14px;padding:16px 18px;animation:fadein 0.3s ease;position:relative;overflow:hidden;}
+.usage-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:.55;}
+.usage-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.usage-title{font-family:'Playfair Display',serif;font-size:15px;color:var(--gold3);font-weight:700;letter-spacing:0.02em;display:flex;align-items:center;gap:8px;}
+.usage-title-sub{font-size:9px;color:var(--cream3);letter-spacing:0.14em;text-transform:uppercase;font-weight:600;margin-left:6px;background:var(--bg2);padding:3px 8px;border-radius:10px;border:1px solid var(--border2);}
+
+/* Top-line summary strip (today / 7d / 30d) */
+.usage-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px;}
+.usage-sum-tile{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;text-align:left;}
+.usage-sum-lbl{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.14em;font-weight:600;margin-bottom:4px;}
+.usage-sum-val{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--cream);font-weight:600;line-height:1;letter-spacing:-0.01em;}
+.usage-sum-val .u-unit{font-size:10px;color:var(--cream3);margin-left:4px;font-weight:400;letter-spacing:0;}
+
+/* Origin breakdown header */
+.origin-section-lbl{display:flex;align-items:center;gap:10px;font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.18em;font-weight:700;margin:6px 0 10px;}
+.origin-section-lbl::before,.origin-section-lbl::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);}
+
+/* Origin cards grid */
+.origin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.origin-card{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;transition:all .2s ease;overflow:hidden;}
+.origin-card:hover{border-color:var(--gold2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.25);}
+.origin-card.has-out{border-color:rgba(224,82,82,.35);}
+.origin-card.has-low{border-color:rgba(232,135,58,.3);}
+.origin-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;}
+.origin-name{font-family:'Playfair Display',serif;font-size:14px;color:var(--gold3);font-weight:700;line-height:1.2;letter-spacing:0.01em;}
+.origin-meta{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.1em;margin-top:3px;}
+.origin-statuses{display:flex;gap:4px;flex-shrink:0;align-items:center;}
+.origin-pill{font-size:8px;font-weight:700;letter-spacing:0.08em;padding:2px 6px;border-radius:9px;text-transform:uppercase;}
+.origin-pill.low{background:rgba(232,135,58,.14);color:var(--orange);border:1px solid rgba(232,135,58,.35);}
+.origin-pill.out{background:rgba(224,82,82,.14);color:var(--red);border:1px solid rgba(224,82,82,.35);}
+.origin-pill.healthy{background:rgba(78,200,122,.1);color:var(--green);border:1px solid rgba(78,200,122,.3);}
+.origin-balance{font-family:'JetBrains Mono',monospace;font-size:20px;color:var(--cream);font-weight:600;line-height:1;letter-spacing:-0.01em;margin-bottom:2px;}
+.origin-balance .u-unit{font-size:10px;color:var(--cream3);margin-left:3px;font-weight:400;}
+.origin-balance-lbl{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;font-weight:600;margin-bottom:10px;}
+
+/* Mini bar showing 7d outflow (proportional within origins) */
+.origin-bar-wrap{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;}
+.origin-bar-row{display:flex;align-items:center;gap:8px;font-size:10px;}
+.origin-bar-lbl{flex:0 0 36px;color:var(--cream3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;font-size:9px;}
+.origin-bar-track{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden;border:1px solid var(--border);}
+.origin-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--gold) 0%,var(--gold2) 100%);transition:width .35s ease;}
+.origin-bar-fill.today-bar{background:linear-gradient(90deg,var(--green) 0%,#7ed89a 100%);}
+.origin-bar-fill.thirty-bar{background:linear-gradient(90deg,var(--cream3) 0%,var(--cream2) 100%);opacity:0.7;}
+.origin-bar-val{flex:0 0 60px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--cream);font-weight:600;}
+.origin-bar-val.zero{color:var(--cream3);font-weight:400;}
+
+.origin-top{font-size:10px;color:var(--cream3);padding-top:8px;border-top:1px dashed var(--border);}
+.origin-top strong{color:var(--gold2);font-weight:600;}
+.origin-top.empty{color:var(--cream3);font-weight:400;}
+
+/* Bottom row: Top Movers + At Risk */
+.usage-foot-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+@media (max-width:560px){.usage-foot-grid{grid-template-columns:1fr;}}
+.usage-foot-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:11px 13px;}
+.usage-foot-lbl{font-size:9px;color:var(--cream3);letter-spacing:0.14em;text-transform:uppercase;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.usage-list{margin:0;padding:0;list-style:none;}
+.usage-list li{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:4px 0;color:var(--cream2);border-bottom:1px solid var(--border);}
+.usage-list li:last-child{border-bottom:none;}
+.usage-list li .u-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:6px;}
+.usage-list li .u-qty{font-family:'JetBrains Mono',monospace;color:var(--gold2);font-weight:600;font-size:11px;}
+.usage-risk-days{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;padding:2px 7px;border-radius:9px;}
+.usage-risk-days.crit{color:var(--red);background:rgba(224,82,82,.12);}
+.usage-risk-days.warn{color:var(--orange);background:rgba(232,135,58,.12);}
+.usage-empty{font-size:10px;color:var(--cream3);padding:6px 0;}
+
+/* ── Team Updates section — VIBRANT & COLORFUL ── */
+.tu-section{margin:14px 20px 0;animation:fadein 0.3s ease;position:relative;}
+.tu-section::before{content:'';position:absolute;top:-2px;left:0;right:0;height:3px;background:linear-gradient(90deg,#ff6b9d,#c44dff,#5b8dff,#42c9d9,#5cd896,#f5cc82,#ff6b9d);background-size:200% 100%;border-radius:3px;animation:tu-rainbow 8s linear infinite;opacity:.6;}
+@keyframes tu-rainbow{0%{background-position:0% 50%;}100%{background-position:200% 50%;}}
+.tu-head-wrap{background:linear-gradient(135deg,rgba(196,77,255,.08) 0%,rgba(91,141,255,.06) 50%,rgba(66,201,217,.04) 100%);border:1px solid rgba(196,77,255,.18);border-radius:14px;padding:14px 18px;margin-bottom:12px;}
+.tu-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.tu-title-wrap{display:flex;align-items:center;gap:10px;}
+.tu-title-icon{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#c44dff 0%,#5b8dff 100%);display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 4px 14px rgba(196,77,255,.35);flex-shrink:0;}
+.tu-title{font-family:'Playfair Display',serif;font-size:15px;background:linear-gradient(135deg,#e0a8ff,#a8c4ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700;letter-spacing:0.02em;}
+.tu-title-sub{font-size:9px;color:var(--cream3);letter-spacing:0.16em;text-transform:uppercase;font-weight:600;margin-top:2px;}
+.tu-count-badge{background:linear-gradient(135deg,rgba(196,77,255,.2),rgba(91,141,255,.16));color:#d4b8ff;border:1px solid rgba(196,77,255,.4);border-radius:11px;padding:2px 9px;font-size:10px;font-weight:700;letter-spacing:0.06em;font-family:'Barlow Condensed',sans-serif;}
+.tu-toggle{font-size:10px;color:var(--cream3);background:rgba(196,77,255,.06);border:1px solid rgba(196,77,255,.25);border-radius:7px;padding:5px 12px;letter-spacing:0.05em;font-weight:600;transition:all .15s;cursor:pointer;}
+.tu-toggle:hover{color:#e0a8ff;border-color:#c44dff;background:rgba(196,77,255,.12);}
+.tu-compose{background:linear-gradient(135deg,rgba(91,141,255,.06),rgba(66,201,217,.04));border:1px solid rgba(91,141,255,.25);border-radius:11px;padding:11px 13px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;position:relative;overflow:hidden;}
+.tu-compose::before{content:'✎';position:absolute;top:8px;right:12px;font-size:18px;opacity:.18;color:#5b8dff;}
+.tu-compose-author{flex:0 1 130px;background:var(--bg2);border:1px solid rgba(91,141,255,.3);border-radius:7px;color:var(--cream);font-size:11px;padding:8px 11px;outline:none;font-family:'Barlow Condensed',sans-serif;min-width:90px;transition:border .15s;}
+.tu-compose-text{flex:1 1 240px;background:var(--bg2);border:1px solid rgba(91,141,255,.3);border-radius:7px;color:var(--cream);font-size:12px;padding:8px 11px;outline:none;font-family:'Barlow Condensed',sans-serif;min-width:0;resize:vertical;min-height:38px;max-height:120px;line-height:1.45;transition:border .15s;}
+.tu-compose-author:focus,.tu-compose-text:focus{border-color:#5b8dff;box-shadow:0 0 0 2px rgba(91,141,255,.15);}
+.tu-post-btn{background:linear-gradient(135deg,#c44dff 0%,#5b8dff 100%);border:none;color:#fff;font-size:11px;font-weight:700;letter-spacing:0.08em;padding:9px 18px;border-radius:7px;white-space:nowrap;font-family:'Barlow Condensed',sans-serif;cursor:pointer;box-shadow:0 4px 14px rgba(196,77,255,.3);transition:all .15s;text-transform:uppercase;}
+.tu-post-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(196,77,255,.45);}
+.tu-post-btn:active{transform:translateY(0);}
+.tu-post-btn:disabled{opacity:0.35;cursor:not-allowed;background:linear-gradient(135deg,#666,#555);box-shadow:none;transform:none;}
+.tu-list{display:flex;flex-direction:column;gap:9px;}
+.tu-item{background:var(--surf);border:1px solid var(--border);border-left:3px solid;border-radius:10px;padding:11px 13px;display:flex;gap:11px;align-items:flex-start;animation:tu-popin 0.3s ease;position:relative;transition:transform .18s,box-shadow .18s;}
+@keyframes tu-popin{from{opacity:0;transform:translateY(8px) scale(0.98);}to{opacity:1;transform:none;}}
+.tu-item:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.25);}
+.tu-item.fresh{box-shadow:0 0 0 1px rgba(78,200,122,.18) inset;}
+/* Avatar — colored circle with author initial */
+.tu-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;text-transform:uppercase;letter-spacing:0.02em;font-family:'Playfair Display',serif;box-shadow:0 2px 8px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.18);}
+.tu-item-body{flex:1;min-width:0;}
+.tu-item-meta{font-size:9px;color:var(--cream3);letter-spacing:0.04em;margin-bottom:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.tu-item-author{font-weight:700;text-transform:uppercase;letter-spacing:0.08em;font-size:10px;}
+.tu-item-rel{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:1px 7px;font-size:9px;font-weight:600;color:var(--cream2);}
+.tu-item-rel.fresh{background:rgba(78,200,122,.1);border-color:rgba(78,200,122,.3);color:#7adb9e;}
+.tu-item-text{font-size:13px;color:var(--cream);line-height:1.5;word-wrap:break-word;font-weight:400;}
+.tu-item-del{background:none;border:none;color:var(--cream3);font-size:13px;padding:3px 5px;line-height:1;flex-shrink:0;opacity:0.45;transition:all .15s;border-radius:5px;cursor:pointer;}
+.tu-item-del:hover{opacity:1;color:var(--red);background:rgba(224,82,82,.1);}
+.tu-empty{padding:24px 16px;background:linear-gradient(135deg,rgba(196,77,255,.04),rgba(91,141,255,.03));border:1px dashed rgba(196,77,255,.25);border-radius:11px;text-align:center;font-size:12px;color:var(--cream3);line-height:1.7;}
+.tu-empty-icon{font-size:30px;display:block;margin-bottom:8px;opacity:.55;}
+
+/* ── Snapshots panel (team) ── */
+.snap-section{margin:0 20px 12px;background:var(--surf);border:1px solid var(--border2);border-radius:10px;overflow:hidden;animation:fadein 0.3s ease;}
+.snap-head{padding:10px 14px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;}
+.snap-title{font-size:11px;font-weight:700;color:var(--gold3);letter-spacing:0.1em;text-transform:uppercase;display:flex;align-items:center;gap:6px;}
+.snap-actions{display:flex;gap:6px;flex-wrap:wrap;}
+.snap-take-btn{background:rgba(78,200,122,0.1);border:1px solid var(--green-bd);color:var(--green);font-size:10px;font-weight:700;letter-spacing:0.06em;padding:5px 12px;border-radius:5px;font-family:'Barlow Condensed',sans-serif;}
+.snap-take-btn:hover{background:rgba(78,200,122,0.18);}
+.snap-toggle-btn{background:transparent;border:1px solid var(--border2);color:var(--cream3);font-size:10px;font-weight:600;letter-spacing:0.06em;padding:5px 12px;border-radius:5px;font-family:'Barlow Condensed',sans-serif;}
+.snap-toggle-btn:hover{color:var(--gold2);border-color:var(--gold);}
+.snap-body{padding:10px 14px;}
+.snap-list{display:flex;flex-direction:column;gap:6px;}
+.snap-row{display:grid;grid-template-columns:1.2fr 1fr 1fr 1fr 0.8fr;gap:8px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);border-radius:7px;align-items:center;font-size:11px;}
+.snap-row-date{font-weight:700;color:var(--cream);font-size:11px;}
+.snap-row-date small{display:block;font-size:9px;color:var(--cream3);font-weight:400;letter-spacing:0;}
+.snap-row-num{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--gold2);font-weight:600;}
+.snap-row-delta{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;}
+.snap-delta-up{color:var(--green);}
+.snap-delta-down{color:var(--red);}
+.snap-delta-flat{color:var(--cream3);}
+.snap-row-low{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--orange);}
+.snap-row-out{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--red);}
+.snap-empty{font-size:11px;color:var(--cream3);padding:14px;text-align:center;}
+@media (max-width:640px){
+  .snap-row{grid-template-columns:1.2fr 1fr 1fr;font-size:10px;}
+  .snap-row .snap-hide-sm{display:none;}
+}
+
+/* ── Activity Filter bar ── */
+.actf-bar{margin:6px 20px 10px;background:var(--surf);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;animation:fadein 0.25s ease;}
+.actf-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+.actf-group{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.actf-lbl{font-size:9px;color:var(--cream3);letter-spacing:0.12em;text-transform:uppercase;font-weight:700;margin-right:2px;}
+.actf-chip{background:transparent;border:1px solid var(--border2);color:var(--cream3);font-size:10px;font-weight:600;letter-spacing:0.05em;padding:4px 9px;border-radius:5px;font-family:'Barlow Condensed',sans-serif;transition:all 0.15s;}
+.actf-chip:hover{color:var(--gold2);border-color:var(--gold);}
+.actf-chip.on{background:rgba(200,146,60,0.14);border-color:var(--gold);color:var(--gold2);}
+.actf-chip.on-in{background:rgba(78,200,122,0.12);border-color:var(--green-bd);color:var(--green);}
+.actf-chip.on-out{background:rgba(224,82,82,0.1);border-color:var(--red-bd);color:var(--red);}
+.actf-chip.on-waste{background:rgba(232,135,58,0.1);border-color:var(--orng-bd);color:var(--orange);}
+.actf-chip.on-adj{background:rgba(96,168,216,0.1);border-color:rgba(96,168,216,0.4);color:var(--blue);}
+.actf-sel{background:var(--bg2);border:1px solid var(--border2);border-radius:5px;color:var(--cream);font-size:10px;padding:4px 8px;outline:none;font-family:'Barlow Condensed',sans-serif;max-width:180px;}
+.actf-sel:focus{border-color:var(--gold);}
+.actf-search{background:var(--bg2);border:1px solid var(--border2);border-radius:5px;color:var(--cream);font-size:10px;padding:4px 8px;outline:none;width:140px;font-family:'Barlow Condensed',sans-serif;}
+.actf-search:focus{border-color:var(--gold);}
+.actf-reset{background:none;border:none;color:var(--cream3);font-size:10px;letter-spacing:0.06em;text-decoration:underline;cursor:pointer;font-family:'Barlow Condensed',sans-serif;}
+.actf-reset:hover{color:var(--gold2);}
+.actf-summary{font-size:10px;color:var(--cream3);margin-top:6px;letter-spacing:0.04em;}
+.actf-summary strong{color:var(--gold2);}
+.actf-toggle-btn{background:rgba(200,146,60,0.08);border:1px solid var(--border2);color:var(--cream2);font-size:10px;font-weight:600;letter-spacing:0.06em;padding:4px 11px;border-radius:5px;font-family:'Barlow Condensed',sans-serif;display:inline-flex;align-items:center;gap:5px;}
+.actf-toggle-btn:hover{border-color:var(--gold);color:var(--gold2);}
+.actf-active-pill{background:var(--gold);color:var(--bg);border-radius:10px;padding:0 7px;font-size:9px;font-weight:700;}
+
+/* ── Data Portability (settings) ── */
+.dp-row{display:flex;gap:8px;flex-wrap:wrap;}
+.dp-btn{flex:1 1 140px;background:rgba(96,168,216,0.08);border:1px solid rgba(96,168,216,0.35);color:#7cc4f0;font-size:11px;font-weight:700;letter-spacing:0.06em;padding:10px 12px;border-radius:7px;font-family:'Barlow Condensed',sans-serif;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;transition:background 0.15s;}
+.dp-btn:hover{background:rgba(96,168,216,0.16);}
+.dp-btn.imp{background:rgba(232,135,58,0.08);border-color:rgba(232,135,58,0.4);color:var(--orange);}
+.dp-btn.imp:hover{background:rgba(232,135,58,0.16);}
+.dp-note{font-size:10px;color:var(--cream3);margin-top:8px;line-height:1.6;}
 
 @media print {
   #header,.h-nav,.h-right,.metrics,.notice,.manual-alert-panel,
@@ -366,8 +713,13 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .skel-card{height:165px;border-radius:12px;}
 .skel-bar{height:10px;margin:6px 0;}
 .skel-row{height:36px;border-radius:6px;margin-bottom:8px;}
-background:rgba(8,5,2,0.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;}
+#overlay{position:fixed;inset:0;background:rgba(8,5,2,0.88);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:600;padding:20px;}
+/* Right-side aligned overlay (used for Login, Send Alert, Change Password) */
+#overlay.right-pos{justify-content:flex-end;padding-right:28px;}
+@media (max-width:720px){#overlay.right-pos{justify-content:center;padding-right:20px;}}
 .modal{background:var(--surf);border:1px solid var(--border2);border-radius:16px;padding:0;width:100%;max-width:400px;animation:popin 0.28s ease;overflow:hidden;}
+@keyframes slidein-right{from{opacity:0;transform:translateX(20px);}to{opacity:1;transform:none;}}
+#overlay.right-pos .modal,#overlay.right-pos .pwd-modal{animation:slidein-right 0.28s ease;}
 .modal-hdr{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;}
 .modal-icon{font-size:24px;animation:glow 2.5s infinite;}
 .modal-title{font-family:'Playfair Display',serif;font-size:18px;color:var(--cream);font-weight:700;}
@@ -625,6 +977,51 @@ var S = {
   incomingConflict: {},   // { [reqKey]: { selectedItemId, editedName } }
   showAlertModal: false,
   showSettings: false,
+  settingsTab: 'general',      // 'general' | 'alerts' | 'data' | 'about'
+
+  /* ── Settings password gate (independent of Team Panel) ── */
+  settingsUnlocked: false,     // session-only — re-prompts on reload
+  showSettingsLogin: false,    // login modal visible
+  sLoginVal: '',               // current input
+  sLoginErr: false,            // wrong password flag
+  sLoginShake: false,          // shake animation flag
+
+  /* ── Alert popup state ─────────────────────────── */
+  showAlertsPopup: false,        // user-controlled show/hide of popup
+  _alertsPopupAutoShown: false,  // tracks whether we already auto-popped this session
+
+  /* ── Recent Movements panel ───────────────────── */
+  movPeriod: 'today',          // 'today' | 'week' | 'month' | 'all'
+  movSearch: '',
+  movTypeFilter: 'All',        // 'All' | 'IN' | 'OUT'
+
+  /* ── Alert preferences (saved to localStorage) ─ */
+  alertPrefs: {
+    soundEnabled: false,
+    desktopNotif: false,
+    snoozeMinutes: 60,
+    criticalThreshold: 0.5,    // multiplier of threshold — at or below 50% of min = critical
+  },
+
+  /* ── End-of-Day Snapshots ───────────────────── */
+  snapshots: {},               // { "YYYY-MM-DD": { ts, totals:{totalKg,lowCount,outCount}, items:[...], by } }
+  showSnapshotsPanel: false,
+  snapshotCompare: null,       // date string of snapshot being viewed
+
+  /* ── Activity Filtering (movement history) ──── */
+  actFilter: { type: 'All', range: 'all', item: 'All', search: '' },
+  showActFilter: false,        // collapsed by default
+
+  /* ── Team Updates (bulletin board) ──────────── */
+  teamUpdates: {},             // { id: { id, ts, author, text } }
+  newUpdText: '',
+  newUpdAuthor: '',
+  showTeamUpdates: true,       // dashboard section visible
+  showTeamUpdatesAll: false,   // show all updates or just last 3
+
+  /* ── Data Portability ───────────────────────── */
+  importBusy: false,
+
   theme: (function(){ try { return localStorage.getItem('wc-theme') || 'dark'; } catch(e) { return 'dark'; } })(),
   accentPreset: (function(){ try { return localStorage.getItem('wc-accent') || ''; } catch(e) { return ''; } })()
 };
@@ -679,7 +1076,7 @@ function fmtClock() {
 ══════════════════════════════════════════════════════ */
 function isBusy() {
   // Any modal open
-  if(S.showLogin || S.logModal !== null || S.confirmModal !== null) return true;
+  if(S.showLogin || S.showSettingsLogin || S.logModal !== null || S.confirmModal !== null) return true;
   // Any inline form active
   if(S.showAddItem || S.showCPwd) return true;
   // Any input/textarea has focus
@@ -697,6 +1094,39 @@ function showConfirm(title, msg, onOk) {
 }
 function getStatus(bal, thr) { return bal === 0 ? 'OUT' : bal < thr ? 'LOW' : 'OK'; }
 
+/* Severity tier — classifies how serious a low-stock event is.
+   CRITICAL: balance is 0 (OUT) OR below criticalThreshold * min
+   WARNING:  balance < min but above critical band
+   OK:       at or above min                                       */
+function getSeverity(bal, thr) {
+  if (bal === 0) return 'CRITICAL';
+  var critBand = thr * (S.alertPrefs && S.alertPrefs.criticalThreshold || 0.5);
+  if (bal <= critBand) return 'CRITICAL';
+  if (bal < thr) return 'WARNING';
+  return 'OK';
+}
+
+/* Estimate days until stock-out based on average daily outflow over last 14 days */
+function estimateDaysLeft(itemId, currentBal) {
+  if (currentBal <= 0) return 0;
+  var cutoff = Date.now() - 14*24*60*60*1000;
+  var totalOut = 0, daysWithOut = 0, dayMap = {};
+  S.history.forEach(function(e){
+    if (Number(e.itemId) !== Number(itemId)) return;
+    if (e.type !== 'OUT' && e.type !== 'WASTE') return;
+    var ts = new Date(e.ts).getTime();
+    if (ts < cutoff) return;
+    var dKey = new Date(e.ts).toDateString();
+    if (!dayMap[dKey]) { dayMap[dKey] = 0; daysWithOut++; }
+    dayMap[dKey] += Number(e.qty)||0;
+    totalOut += Number(e.qty)||0;
+  });
+  if (totalOut === 0 || daysWithOut === 0) return null;
+  var avgDaily = totalOut / Math.max(daysWithOut, 7);  // smooth over min 7 days
+  if (avgDaily <= 0) return null;
+  return Math.max(0, Math.round(currentBal / avgDaily));
+}
+
 var SM = {
   OK:  {lbl:'IN STOCK', cls:'badge-ok',  color:'var(--green)',  bar:'var(--green)'},
   LOW: {lbl:'LOW STOCK',cls:'badge-low', color:'var(--orange)', bar:'var(--orange)'},
@@ -706,6 +1136,154 @@ function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g
 function todayStr() { return new Date().toDateString(); }
 function fmtTime(d) { return d ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'; }
 function fmtDate(d) { return d ? d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'; }
+
+/* ── Team Updates: vibrant author color palette ──────────
+   Hash author name → consistent color. Same name = same color
+   across all posts, giving the bulletin a distinct identity per
+   contributor.                                                  */
+var TU_AUTHOR_PALETTE = [
+  { bg:'linear-gradient(135deg,#ff6b9d 0%,#c44dff 100%)', border:'#c44dff', accent:'#e0a8ff' }, // pink-purple
+  { bg:'linear-gradient(135deg,#5b8dff 0%,#42c9d9 100%)', border:'#5b8dff', accent:'#a8c4ff' }, // blue-cyan
+  { bg:'linear-gradient(135deg,#5cd896 0%,#42c9d9 100%)', border:'#5cd896', accent:'#9bedc4' }, // green-cyan
+  { bg:'linear-gradient(135deg,#f5cc82 0%,#e8873a 100%)', border:'#e8873a', accent:'#f5cc82' }, // gold-orange
+  { bg:'linear-gradient(135deg,#e05252 0%,#ff6b9d 100%)', border:'#e05252', accent:'#ff9b9b' }, // red-pink
+  { bg:'linear-gradient(135deg,#9d6bff 0%,#5b8dff 100%)', border:'#9d6bff', accent:'#c8a8ff' }, // violet-blue
+  { bg:'linear-gradient(135deg,#ffa94d 0%,#ff6b9d 100%)', border:'#ffa94d', accent:'#ffc88f' }, // orange-pink
+  { bg:'linear-gradient(135deg,#42c9d9 0%,#5cd896 100%)', border:'#42c9d9', accent:'#8be0e8' }  // teal-mint
+];
+function tuAuthorColor(name) {
+  var s = String(name || 'Team');
+  var hash = 0;
+  for (var i = 0; i < s.length; i++) {
+    hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0;
+  }
+  return TU_AUTHOR_PALETTE[Math.abs(hash) % TU_AUTHOR_PALETTE.length];
+}
+function tuAuthorInitial(name) {
+  var s = String(name || 'Team').trim();
+  if (!s) return '?';
+  var parts = s.split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return s.substring(0, 2).toUpperCase();
+}
+
+/* ── Period helpers for Recent Movements ─────────── */
+function periodCutoff(period) {
+  var now = new Date();
+  if (period === 'today') {
+    var t = new Date(); t.setHours(0,0,0,0); return t.getTime();
+  }
+  if (period === 'week') {
+    return now.getTime() - 7*24*60*60*1000;
+  }
+  if (period === 'month') {
+    return now.getTime() - 30*24*60*60*1000;
+  }
+  return 0; // 'all'
+}
+function periodLabel(p) {
+  return p==='today'?'Today':p==='week'?'Last 7 Days':p==='month'?'Last 30 Days':'All Time';
+}
+function filteredMovements() {
+  var cutoff = periodCutoff(S.movPeriod);
+  var search = (S.movSearch || '').toLowerCase().trim();
+  var typeF = S.movTypeFilter;
+  return S.history.filter(function(e){
+    var ts = new Date(e.ts).getTime();
+    if (cutoff && ts < cutoff) return false;
+    if (typeF !== 'All' && e.type !== typeF) {
+      // 'OUT' filter should also include WASTE/ADJ-out
+      if (typeF === 'OUT' && (e.type==='WASTE')) { /* keep */ }
+      else if (typeF === 'IN' && e.type === 'IN') { /* keep */ }
+      else return false;
+    }
+    if (search) {
+      var hay = (e.itemName||'') + ' ' + (e.note||'') + ' ' + (e.type||'');
+      if (hay.toLowerCase().indexOf(search) < 0) return false;
+    }
+    return true;
+  });
+}
+
+/* Group movements by day for display */
+function groupByDay(movs) {
+  var groups = {};
+  movs.forEach(function(e){
+    var d = new Date(e.ts);
+    var key = d.toDateString();
+    if (!groups[key]) groups[key] = { key:key, date:d, items:[], totalIn:0, totalOut:0 };
+    groups[key].items.push(e);
+    var q = Number(e.qty)||0;
+    if (e.type === 'IN') groups[key].totalIn += q;
+    else groups[key].totalOut += q;
+  });
+  // Return sorted desc by date
+  return Object.values(groups).sort(function(a,b){ return b.date.getTime() - a.date.getTime(); });
+}
+
+/* ── Alert preferences storage ─────────────────────── */
+function loadAlertPrefs() {
+  try {
+    var raw = localStorage.getItem('windmill_alert_prefs');
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        Object.assign(S.alertPrefs, parsed);
+      }
+    }
+  } catch(e) {}
+}
+function saveAlertPrefs() {
+  try { localStorage.setItem('windmill_alert_prefs', JSON.stringify(S.alertPrefs)); } catch(e) {}
+}
+
+/* Play subtle notification chime */
+function playAlertChime() {
+  if (!S.alertPrefs || !S.alertPrefs.soundEnabled) return;
+  try {
+    var ctx = new (window.AudioContext || window.webkitAudioContext)();
+    var o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880;
+    o.type = 'sine';
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.45);
+    o.start(); o.stop(ctx.currentTime + 0.5);
+    setTimeout(function(){
+      var o2 = ctx.createOscillator(), g2 = ctx.createGain();
+      o2.connect(g2); g2.connect(ctx.destination);
+      o2.frequency.value = 1320; o2.type = 'sine';
+      g2.gain.setValueAtTime(0.0001, ctx.currentTime);
+      g2.gain.exponentialRampToValueAtTime(0.14, ctx.currentTime + 0.02);
+      g2.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.4);
+      o2.start(); o2.stop(ctx.currentTime + 0.45);
+    }, 180);
+  } catch(e) { /* audio unavailable */ }
+}
+
+/* Request browser notification permission */
+function requestDesktopPerm() {
+  if (!('Notification' in window)) {
+    showToast('⚠️ Browser does not support notifications.');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    showToast('✓ Notifications already enabled.');
+    return;
+  }
+  Notification.requestPermission().then(function(p){
+    if (p === 'granted') showToast('🔔 Desktop notifications on.');
+    else showToast('🔕 Permission denied.');
+  });
+}
+function fireDesktopNotif(title, body) {
+  if (!S.alertPrefs || !S.alertPrefs.desktopNotif) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    new Notification(title, { body: body, icon: '', tag: 'windmill-stock' });
+  } catch(e) {}
+}
 function todayMoves(itemId, type) {
   var tod = todayStr();
   return S.history.filter(function(e) {
@@ -855,6 +1433,337 @@ function buildCategoryLedger(itemIds, fromDate, toDate) {
   return rows;
 }
 
+
+/* ══════════════════════════════════════════════════════
+   FEATURE HELPERS (added)
+   ─────────────────────────────────────────────────────
+   • Snapshots — capture daily stock state
+   • Usage Tracking — derived analytics
+   • Activity Filtering — filter movement history
+   • Team Updates — bulletin board
+   • Data Portability — full backup/restore
+══════════════════════════════════════════════════════ */
+
+/* ── End-of-Day Snapshots ──────────────────────── */
+function snapDateKey(d) {
+  d = d || new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function buildSnapshot(by) {
+  var totalKg = S.items.reduce(function(s,i){ return s + Number(i.balance); }, 0);
+  var lowCount = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
+  var outCount = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
+  return {
+    ts: new Date().toISOString(),
+    by: by || 'auto',
+    totals: { totalKg: Math.round(totalKg*10)/10, lowCount: lowCount, outCount: outCount, itemCount: S.items.length },
+    items: S.items.map(function(i){
+      return { id:i.id, name:i.name, balance:Number(i.balance), unit:i.unit||'kg', threshold:Number(i.threshold), status:getStatus(i.balance,i.threshold) };
+    })
+  };
+}
+function takeSnapshot(by) {
+  if(!S.items.length) { showToast('No items to snapshot.'); return; }
+  var key = snapDateKey();
+  var snap = buildSnapshot(by);
+  S.snapshots = S.snapshots || {};
+  S.snapshots[key] = snap;
+  if(typeof fbRef !== 'undefined' && fbRef) {
+    fbRef.child('snapshots').child(key).set(snap);
+  }
+  showToast('📸 Snapshot saved for '+key);
+  render();
+}
+/* Auto: if no snapshot exists for yesterday, capture one (only when items exist) */
+function autoSnapshotCheck() {
+  if(!S.items || !S.items.length) return;
+  var keys = Object.keys(S.snapshots||{});
+  if(!keys.length) {
+    // First run — seed today's snapshot so future deltas exist
+    takeSnapshot('auto-first');
+    return;
+  }
+  var today = snapDateKey();
+  if(!S.snapshots[today]) {
+    takeSnapshot('auto-daily');
+  }
+}
+function snapshotKeysSorted() {
+  return Object.keys(S.snapshots||{}).sort().reverse();
+}
+function snapshotDelta(curKey, prevKey) {
+  var cur = S.snapshots[curKey], prev = prevKey ? S.snapshots[prevKey] : null;
+  if(!cur) return null;
+  if(!prev) return { totalKg: 0, lowCount: 0, outCount: 0, isFirst: true };
+  return {
+    totalKg: Math.round((cur.totals.totalKg - prev.totals.totalKg)*10)/10,
+    lowCount: cur.totals.lowCount - prev.totals.lowCount,
+    outCount: cur.totals.outCount - prev.totals.outCount,
+    isFirst: false
+  };
+}
+
+/* ── Usage Tracking ────────────────────────────── */
+/* Total OUT (+WASTE) over last N days */
+function usageTotalOut(days) {
+  var cutoff = Date.now() - days*86400000;
+  return S.history.filter(function(e){
+    return (e.type==='OUT' || e.type==='WASTE') && new Date(e.ts).getTime() >= cutoff;
+  }).reduce(function(s,e){ return s + Number(e.qty); }, 0);
+}
+/* Top movers (most OUT volume) over N days */
+function usageTopMovers(days, limit) {
+  var cutoff = Date.now() - days*86400000;
+  var totals = {};
+  S.history.forEach(function(e){
+    if((e.type==='OUT' || e.type==='WASTE') && new Date(e.ts).getTime() >= cutoff) {
+      var k = String(e.itemId);
+      totals[k] = (totals[k]||0) + Number(e.qty);
+    }
+  });
+  var arr = Object.keys(totals).map(function(k){
+    var item = S.items.find(function(i){ return String(i.id)===k; });
+    return { id:k, name: item?item.name:'(deleted item)', qty: Math.round(totals[k]*10)/10, unit: item?item.unit:'kg' };
+  }).sort(function(a,b){ return b.qty - a.qty; });
+  return arr.slice(0, limit||3);
+}
+/* Days of stock remaining for an item, given its avg daily usage */
+function daysOfStock(item) {
+  var avg = avgDailyUsage(item.id);
+  if(avg <= 0) return null;
+  return Math.floor(item.balance / avg);
+}
+/* Items at risk: low/out OR <7 days of stock — sorted by urgency */
+function usageAtRisk(limit) {
+  var arr = S.items.map(function(i){
+    var d = daysOfStock(i);
+    var st = getStatus(i.balance, i.threshold);
+    return { item:i, days:d, status:st };
+  }).filter(function(r){
+    return r.status !== 'OK' || (r.days !== null && r.days <= 7);
+  }).sort(function(a,b){
+    // OUT first, then LOW, then by days remaining
+    var ord = { OUT:0, LOW:1, OK:2 };
+    if(ord[a.status] !== ord[b.status]) return ord[a.status] - ord[b.status];
+    var da = a.days===null ? 999 : a.days, db = b.days===null ? 999 : b.days;
+    return da - db;
+  });
+  return arr.slice(0, limit||3);
+}
+
+/* Aggregate usage data by origin (e.g. "Ethiopia 🇪🇹") — returns array sorted by 7d outflow */
+function usageByOrigin() {
+  var grouped = {};
+  // First pass: group items by origin & gather balance/status
+  S.items.forEach(function(item){
+    var orig = item.origin && item.origin.trim() ? item.origin : '— Unspecified';
+    if(!grouped[orig]) grouped[orig] = {
+      origin: orig, items: [], itemIds: {}, balance: 0,
+      lowCount: 0, outCount: 0,
+      outToday: 0, out7: 0, out30: 0,
+      moves: {}      // itemId -> qty (for top-mover lookup, 7d window)
+    };
+    var g = grouped[orig];
+    g.items.push(item);
+    g.itemIds[String(item.id)] = item;
+    g.balance += Number(item.balance);
+    var st = getStatus(item.balance, item.threshold);
+    if(st === 'LOW') g.lowCount++;
+    if(st === 'OUT') g.outCount++;
+  });
+  // Second pass: bucket history outflows into the right origin
+  var now = Date.now();
+  var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  var todayMs = todayStart.getTime();
+  var ms7  = now - 7*86400000;
+  var ms30 = now - 30*86400000;
+  S.history.forEach(function(e){
+    if(e.type !== 'OUT' && e.type !== 'WASTE') return;
+    var t = new Date(e.ts).getTime();
+    if(t < ms30) return;
+    // Find origin via item
+    var origin = null;
+    Object.keys(grouped).forEach(function(o){
+      if(grouped[o].itemIds[String(e.itemId)]) origin = o;
+    });
+    if(!origin) return;
+    var g = grouped[origin];
+    var qty = Number(e.qty);
+    g.out30 += qty;
+    if(t >= ms7)     { g.out7 += qty; g.moves[String(e.itemId)] = (g.moves[String(e.itemId)]||0) + qty; }
+    if(t >= todayMs) { g.outToday += qty; }
+  });
+  // Convert to array, compute top mover per origin, round numbers, sort
+  return Object.keys(grouped).map(function(k){
+    var g = grouped[k];
+    var topId=null, topQty=0;
+    Object.keys(g.moves).forEach(function(id){ if(g.moves[id] > topQty){ topQty=g.moves[id]; topId=id; } });
+    var topItem = topId ? g.itemIds[topId] : null;
+    return {
+      origin: g.origin,
+      itemCount: g.items.length,
+      balance:  Math.round(g.balance*10)/10,
+      lowCount: g.lowCount,
+      outCount: g.outCount,
+      outToday: Math.round(g.outToday*10)/10,
+      out7:     Math.round(g.out7*10)/10,
+      out30:    Math.round(g.out30*10)/10,
+      topItemName: topItem ? topItem.name : null,
+      topItemQty:  Math.round(topQty*10)/10,
+      unit: g.items[0] ? g.items[0].unit : 'kg'
+    };
+  }).sort(function(a,b){
+    // Sort: outflow first (busiest origins), then balance desc as tiebreaker
+    if(b.out7 !== a.out7) return b.out7 - a.out7;
+    return b.balance - a.balance;
+  });
+}
+
+/* ── Activity Filtering ────────────────────────── */
+function filterHistory(entries) {
+  var f = S.actFilter || {};
+  var rangeCutoff = null;
+  if(f.range === 'today') {
+    var d = new Date(); d.setHours(0,0,0,0); rangeCutoff = d.getTime();
+  } else if(f.range === '7d')  rangeCutoff = Date.now() - 7*86400000;
+  else if(f.range === '30d') rangeCutoff = Date.now() - 30*86400000;
+  var srch = (f.search||'').toLowerCase().trim();
+  return entries.filter(function(e){
+    if(f.type && f.type !== 'All' && e.type !== f.type) return false;
+    if(f.item && f.item !== 'All' && String(e.itemId) !== String(f.item)) return false;
+    if(rangeCutoff && new Date(e.ts).getTime() < rangeCutoff) return false;
+    if(srch) {
+      var hay = ((e.itemName||'')+' '+(e.note||'')).toLowerCase();
+      if(hay.indexOf(srch) === -1) return false;
+    }
+    return true;
+  });
+}
+function activeFilterCount() {
+  var f = S.actFilter || {};
+  var n = 0;
+  if(f.type && f.type !== 'All') n++;
+  if(f.range && f.range !== 'all') n++;
+  if(f.item && f.item !== 'All') n++;
+  if(f.search) n++;
+  return n;
+}
+function resetActFilter() {
+  S.actFilter = { type: 'All', range: 'all', item: 'All', search: '' };
+  S.histPage = 1;
+}
+
+/* ── Team Updates (bulletin board) ─────────────── */
+function postTeamUpdate(text, author) {
+  text = String(text||'').trim();
+  if(!text) return;
+  var id = Date.now();
+  var entry = {
+    id: id,
+    ts: new Date().toISOString(),
+    author: String(author||'Team').trim().slice(0,40) || 'Team',
+    text: text.slice(0, 500)
+  };
+  S.teamUpdates = S.teamUpdates || {};
+  S.teamUpdates[id] = entry;
+  if(typeof fbRef !== 'undefined' && fbRef) {
+    fbRef.child('teamUpdates').child(String(id)).set(entry);
+  }
+  S.newUpdText = '';
+  showToast('📢 Team update posted.');
+  render();
+}
+function deleteTeamUpdate(id) {
+  if(!S.teamUpdates) return;
+  delete S.teamUpdates[id];
+  if(typeof fbRef !== 'undefined' && fbRef) {
+    fbRef.child('teamUpdates').child(String(id)).remove();
+  }
+  render();
+}
+function teamUpdatesSorted() {
+  var arr = Object.keys(S.teamUpdates||{}).map(function(k){ return S.teamUpdates[k]; });
+  arr.sort(function(a,b){ return new Date(b.ts) - new Date(a.ts); });
+  return arr;
+}
+
+/* ── Data Portability ──────────────────────────── */
+function exportFullBackup() {
+  var payload = {
+    _meta: {
+      app: 'Windmill Cafe & Roastery',
+      exportedAt: new Date().toISOString(),
+      version: 1
+    },
+    items: S.items,
+    history: S.history,
+    comments: S.comments,
+    categories: S.categories,
+    snapshots: S.snapshots || {},
+    teamUpdates: S.teamUpdates || {}
+    // password intentionally NOT exported
+  };
+  var blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'windmill-backup-'+snapDateKey()+'.json';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
+  showToast('💾 Backup downloaded.');
+}
+function importFullBackup(file) {
+  if(!file) return;
+  S.importBusy = true; render();
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    var raw;
+    try { raw = JSON.parse(ev.target.result); }
+    catch(e) { S.importBusy=false; showToast('⚠ Invalid JSON file.'); render(); return; }
+    if(!raw || !Array.isArray(raw.items)) {
+      S.importBusy=false; showToast('⚠ File missing required "items" array.'); render(); return;
+    }
+    var summary = 'Items: '+(raw.items?raw.items.length:0)
+      +' · History: '+(raw.history?raw.history.length:0)
+      +' · Snapshots: '+(raw.snapshots?Object.keys(raw.snapshots).length:0)
+      +' · Updates: '+(raw.teamUpdates?Object.keys(raw.teamUpdates).length:0);
+    showConfirm(
+      'Replace ALL Data?',
+      '⚠ This will OVERWRITE all current items, history, comments, snapshots and team updates with the contents of the backup file.\n\n'+summary+'\n\nThe team password will not be changed. This cannot be undone.',
+      function() {
+        var update = {
+          items: raw.items,
+          history: raw.history || [],
+          comments: raw.comments || {},
+          categories: raw.categories || S.categories,
+          snapshots: raw.snapshots || {},
+          teamUpdates: raw.teamUpdates || {}
+        };
+        _ignoreRemote = true;
+        fbRef.update(update, function(err) {
+          setTimeout(function(){ _ignoreRemote = false; }, 800);
+          if(err) { showToast('⚠ Import failed: '+err.message); }
+          else {
+            S.items = update.items;
+            S.history = update.history;
+            S.comments = update.comments;
+            S.categories = update.categories;
+            S.snapshots = update.snapshots;
+            S.teamUpdates = update.teamUpdates;
+            showToast('✅ Backup restored successfully.');
+          }
+          S.importBusy = false;
+          render();
+        });
+      }
+    );
+    S.importBusy = false; render();
+  };
+  reader.onerror = function(){ S.importBusy=false; showToast('⚠ Could not read file.'); render(); };
+  reader.readAsText(file);
+}
+
 /* ══════════════════════════════════════════════════════
    FIREBASE READ/WRITE
    KEY FIX: use fbRef.update() (atomic) instead of two
@@ -905,7 +1814,8 @@ function _shouldAlert(itemId, status) {
   if (!prev) return true;                               // never alerted → alert
   if (prev.status !== status) return true;              // escalated (LOW → OUT) → alert
   var elapsed = Date.now() - new Date(prev.ts).getTime();
-  return elapsed > 60 * 60 * 1000;                     // same status, >1 hr ago → re-alert
+  var snoozeMs = ((S.alertPrefs && S.alertPrefs.snoozeMinutes) || 60) * 60 * 1000;
+  return elapsed > snoozeMs;                            // configurable snooze
 }
 
 /* ── Core writer ─────────────────────────────────────── */
@@ -928,6 +1838,7 @@ function sendStockAlert(payload) {
    status within the past hour.                          */
 function scanAndSendAlerts() {
   if (!alertsRef || !S.items || !S.items.length) return;
+  var newAlerts = []; // collect for chime / desktop notif
   S.items.forEach(function(item) {
     var status = getStatus(item.balance, item.threshold);
 
@@ -947,6 +1858,7 @@ function scanAndSendAlerts() {
         message: '🚨 OUT OF STOCK: ' + item.name +
                  ' has reached 0 ' + item.unit + '. Please roast more urgently.'
       });
+      newAlerts.push({ status:'OUT', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
     } else {
       sendStockAlert({
         type: 'auto_low', status: 'LOW',
@@ -955,9 +1867,25 @@ function scanAndSendAlerts() {
         message: '⚠️ LOW STOCK: ' + item.name + ' is at ' + item.balance +
                  ' ' + item.unit + ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
       });
+      newAlerts.push({ status:'LOW', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
     }
     _saveAlertedItem(item.id, status);
   });
+
+  // Local feedback — only if new alerts fired this scan
+  if (newAlerts.length) {
+    playAlertChime();
+    var outCnt = newAlerts.filter(function(a){return a.status==='OUT';}).length;
+    var lowCnt = newAlerts.length - outCnt;
+    var title = outCnt > 0
+      ? '🚨 Stock Alert — '+(outCnt+lowCnt)+' item'+(outCnt+lowCnt===1?'':'s')+' need attention'
+      : '⚠ Low Stock — '+lowCnt+' item'+(lowCnt===1?'':'s')+' below minimum';
+    var body = newAlerts.slice(0, 3).map(function(a){
+      return (a.status==='OUT'?'• OUT: ':'• LOW: ')+a.name+' ('+a.balance+'/'+a.threshold+' '+a.unit+')';
+    }).join('\n');
+    if (newAlerts.length > 3) body += '\n…and '+(newAlerts.length-3)+' more';
+    fireDesktopNotif(title, body);
+  }
 }
 
 /* ── Manual alert ────────────────────────────────────── */
@@ -984,6 +1912,8 @@ function applyRemoteData(data, flash) {
   var password   = data.password   || 'windmill2024';
   var comments   = data.comments   || {};
   var categories = data.categories ? (Array.isArray(data.categories) ? data.categories : Object.values(data.categories)) : null;
+  var snapshots  = data.snapshots  || {};
+  var teamUpdates= data.teamUpdates|| {};
 
   if(items) {
     if(flash && S.items.length) {
@@ -1004,6 +1934,8 @@ function applyRemoteData(data, flash) {
   S.password = password;
   S.comments = comments;
   if(categories) S.categories = categories;
+  S.snapshots = snapshots;
+  S.teamUpdates = teamUpdates;
   S.lastSync = new Date();
   S.syncing  = false;
 
@@ -1154,7 +2086,33 @@ function doLogin() {
     setTimeout(function(){ S.loginShake = false; render(); }, 600);
   }
 }
-function doLock() { S.teamUnlocked = false; S.view = 'dashboard'; S.logModal = null; S.showAddItem = false; S.showCPwd = false; render(); }
+function doLock() { S.teamUnlocked = false; S.settingsUnlocked = false; S.view = 'dashboard'; S.logModal = null; S.showAddItem = false; S.showCPwd = false; S.showSettings = false; render(); }
+
+/* ── Settings password gate ─────────────────────────────────
+   Same password as Team Panel, but unlocks ONLY Settings.
+   Stays unlocked for the session (resets on reload).        */
+function doSettingsLogin() {
+  var el = document.getElementById('sLoginInput');
+  var val = el ? el.value : (S.sLoginVal || '');
+  if (val === S.password) {
+    S.settingsUnlocked = true;
+    S.showSettingsLogin = false;
+    S.sLoginVal = '';
+    S.sLoginErr = false;
+    S.showSettings = true;
+    render();
+    showToast('🔓 Settings unlocked.');
+  } else {
+    S.sLoginErr = true;
+    S.sLoginShake = true;
+    render();
+    setTimeout(function(){
+      S.sLoginShake = false;
+      render();
+      setTimeout(function(){ var f=document.getElementById('sLoginInput'); if(f){ f.focus(); f.select(); } }, 30);
+    }, 600);
+  }
+}
 
 function logMovement(itemId, type, qty, note) {
   var item = S.items.find(function(i){ return i.id === itemId; });
@@ -1387,6 +2345,80 @@ function exportCSV() {
   showToast('📥 CSV exported!');
 }
 
+/* ══════════════════════════════════════════════════════
+   EXPORT MOVEMENTS CSV — Day-by-day, Week, or Month
+   Records every movement entry with full detail
+══════════════════════════════════════════════════════ */
+function csvEscape(v) {
+  v = String(v == null ? '' : v);
+  if (v.indexOf('"')>=0 || v.indexOf(',')>=0 || v.indexOf('\n')>=0) {
+    return '"' + v.replace(/"/g, '""') + '"';
+  }
+  return v;
+}
+function exportMovementsCSV(period) {
+  var movs = filteredMovements();
+  if (!movs.length) {
+    showToast('No movements to export for this period.');
+    return;
+  }
+  var lbl = periodLabel(period || S.movPeriod);
+  var groups = groupByDay(movs);
+
+  // Header
+  var lines = [];
+  lines.push('Windmill Cafe & Roastery — Movement Records');
+  lines.push('Period: ' + lbl);
+  lines.push('Exported: ' + new Date().toLocaleString());
+  lines.push('Total entries: ' + movs.length);
+  lines.push('');
+  lines.push(['Date','Time','Day','Product','Type','Qty','Unit','Note','User'].map(csvEscape).join(','));
+
+  // Per-day grouped (oldest day first inside CSV for readability)
+  groups.slice().reverse().forEach(function(g){
+    // Day separator + summary
+    var dStr = g.date.toLocaleDateString([], {weekday:'long', year:'numeric', month:'short', day:'numeric'});
+    lines.push('');
+    lines.push(csvEscape('── ' + dStr + ' — IN: ' + (Math.round(g.totalIn*10)/10) + ' kg / OUT: ' + (Math.round(g.totalOut*10)/10) + ' kg ──'));
+    // Sort items oldest-first within the day
+    var sorted = g.items.slice().sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
+    sorted.forEach(function(e){
+      var d = new Date(e.ts);
+      lines.push([
+        d.toLocaleDateString([], {year:'numeric', month:'2-digit', day:'2-digit'}),
+        d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}),
+        d.toLocaleDateString([], {weekday:'short'}),
+        e.itemName || '',
+        e.type || '',
+        (e.type === 'IN' ? '+' : '-') + (Number(e.qty)||0),
+        'kg',
+        e.note || '',
+        e.user || ''
+      ].map(csvEscape).join(','));
+    });
+  });
+
+  // Period totals
+  var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+  var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+  lines.push('');
+  lines.push(csvEscape('── PERIOD TOTALS ──'));
+  lines.push(['','','','Total IN','', '+'+(Math.round(totalIn*10)/10),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Total OUT','','-'+(Math.round(totalOut*10)/10),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Net Change','',(totalIn-totalOut>=0?'+':'')+(Math.round((totalIn-totalOut)*10)/10),'kg','',''].map(csvEscape).join(','));
+
+  // Build & download — BOM so Excel opens UTF-8 correctly
+  var csv = '\uFEFF' + lines.join('\n');
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  var dateTag = new Date().toISOString().slice(0,10);
+  var pTag = (period||S.movPeriod);
+  a.href = url; a.download = 'windmill-movements-'+pTag+'-'+dateTag+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('📥 ' + movs.length + ' movements exported (' + lbl + ').');
+}
+
 
 /* ══════════════════════════════════════════════════════
    ERP — RENDER INCOMING STOCK PANEL
@@ -1481,7 +2513,7 @@ function renderIncoming(h) {
       if(req.notes) {
         h += '<div class="incoming-match-row" style="margin-top:10px">';
         h += '<span class="incoming-match-lbl">Roaster Notes</span>';
-        h += '<span class="incoming-match-val" style="font-style:italic;color:var(--cream3)">' + esc(req.notes) + '</span>';
+        h += '<span class="incoming-match-val" style="color:var(--cream3)">' + esc(req.notes) + '</span>';
         h += '</div>';
       }
 
@@ -1559,7 +2591,7 @@ function render() {
 
   /* OVERLAY: Send Alert to Roastery */
   if(S.showAlertModal) {
-    h += '<div id="overlay"><div class="modal">'
+    h += '<div id="overlay" class="right-pos"><div class="modal">'
       +'<div class="modal-hdr"><div class="modal-icon">📡</div>'
       +'<div><div class="modal-title">Send Alert to Roastery</div>'
       +'<div class="modal-sub">Message will be pushed to the roastery in real-time</div></div></div>'
@@ -1576,7 +2608,7 @@ function render() {
 
   /* OVERLAY: Login */
   if(S.showLogin) {
-    h += '<div id="overlay"><div class="modal"><div class="modal-hdr"><div class="modal-icon">🔒</div>'
+    h += '<div id="overlay" class="right-pos"><div class="modal"><div class="modal-hdr"><div class="modal-icon">🔒</div>'
       +'<div><div class="modal-title">Team Access</div><div class="modal-sub">Enter your team password to continue</div></div></div>'
       +'<div class="modal-body">'
       +'<div class="'+(S.loginShake?'shake':'')+'"><label style="display:block;font-size:9px;color:var(--cream3);margin-bottom:6px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600">Password</label>'
@@ -1587,6 +2619,28 @@ function render() {
       +'<button class="btn-unlock" id="loginBtn">Unlock Team Panel →</button>'
       +'<button class="btn-cancel" id="loginClose" style="text-align:center">Cancel</button>'
       +'</div></div></div>';
+  }
+
+  /* OVERLAY: Settings Password Gate */
+  if(S.showSettingsLogin) {
+    h += '<div id="settings-login">'
+      +'<div class="s-login-panel'+(S.sLoginShake?' shake':'')+'">'
+      +'<div class="s-login-hdr">'
+      +'<div class="s-login-icon-wrap">⚙</div>'
+      +'<div class="s-login-title">Settings Access</div>'
+      +'<div class="s-login-sub">Password Protected</div>'
+      +'</div>'
+      +'<div class="s-login-body">'
+      +'<label class="s-login-label">🔐 Enter Password</label>'
+      +'<input type="password" id="sLoginInput" class="s-login-input'+(S.sLoginErr?' err':'')+'" placeholder="Type your password" autocomplete="off" value="'+esc(S.sLoginVal)+'">'
+      +(S.sLoginErr?'<div class="s-login-err">⚠ Incorrect password. Try again.</div>':'')
+      +'<div class="s-login-hint">Use the same password as the <strong>Team Panel</strong>.<br>Settings stays unlocked until you reload.</div>'
+      +'</div>'
+      +'<div class="s-login-foot">'
+      +'<button class="s-login-btn" id="sLoginBtn">🔓 Unlock Settings</button>'
+      +'<button class="s-login-cancel" id="sLoginCancel">Cancel</button>'
+      +'</div>'
+      +'</div></div>';
   }
 
   /* OVERLAY: Log Movement */
@@ -1619,6 +2673,30 @@ function render() {
     }
   }
 
+  /* OVERLAY: Change Team Password (global — opens from Settings) */
+  if(S.showCPwd) {
+    h += '<div id="overlay" class="right-pos"><div class="pwd-modal">'
+      +'<div class="pwd-modal-hdr">'
+      +'<span style="font-size:24px">🔐</span>'
+      +'<div><div style="font-family:\'Playfair Display\',serif;font-size:17px;color:var(--gold3);font-weight:700">Change Team Password</div>'
+      +'<div style="font-size:10px;color:var(--cream3);margin-top:2px;letter-spacing:0.06em">New password must be at least 6 characters</div>'
+      +'</div></div>'
+      +'<div class="pwd-modal-body">'
+      +'<div class="form-field" style="margin-bottom:12px"><label>Current Password</label>'
+      +'<input type="password" class="inp" id="cpOld" value="'+esc(S.cpOld)+'" autocomplete="new-password" placeholder="Enter current password"></div>'
+      +'<div class="form-field" style="margin-bottom:12px"><label>New Password</label>'
+      +'<input type="password" class="inp" id="cpNew" value="'+esc(S.cpNew)+'" autocomplete="new-password" placeholder="At least 6 characters"></div>'
+      +'<div class="form-field"><label>Confirm New Password</label>'
+      +'<input type="password" class="inp" id="cpConf" value="'+esc(S.cpConf)+'" autocomplete="new-password" placeholder="Repeat new password"></div>'
+      +(S.cpErr?'<div class="err-txt" style="margin-top:10px;font-size:11px">⚠ '+esc(S.cpErr)+'</div>':'')
+      +'</div>'
+      +'<div class="pwd-modal-foot">'
+      +'<button class="btn-save" id="cpSave" style="flex:1;padding:11px">🔑 Update Password</button>'
+      +'<button class="btn-cancel" id="cpCancel" style="padding:11px 18px">Cancel</button>'
+      +'</div>'
+      +'</div></div>';
+  }
+
   /* HEADER */
   var sync = S.syncing;
   h += '<div id="header">'
@@ -1643,13 +2721,21 @@ function render() {
     +'<button class="nav-btn '+(S.teamUnlocked?'active-team':'locked-team')+'" id="navTeam">'+(S.teamUnlocked?'✏️':'🔒')+' Team Panel</button>'
     +'</div>'
     +'<div class="h-right">'
+    +(function(){
+      // Show pulsing alert badge ONLY when there are items below threshold.
+      // Clicking it opens the alerts popup.
+      var n = S.items.filter(function(i){ return getStatus(i.balance, i.threshold) !== 'OK'; }).length;
+      if (!n) return '';
+      return '<button class="alert-badge-btn" id="openAlertsPopupBtn" title="View stock alerts">'
+        +'Alerts <span class="alert-badge-count">'+n+'</span></button>';
+    })()
     +'<button class="alert-hdr-btn" id="openAlertModalBtn" title="Send Alert to Roastery">📡 Alert</button>'
     +(S.teamUnlocked?'<button class="lock-btn" id="lockBtn">🔓 Lock</button>':'')
     +'<span class="h-clock" id="headerClock">'+fmtClock().hm+'</span>'
     +'<div class="live-dot" style="background:'+(sync?'var(--orange)':'var(--green)')+';box-shadow:0 0 6px '+(sync?'var(--orange)':'var(--green)')+';animation:'+(sync?'spin 1s linear infinite':'pulse 2s infinite')+'"></div>'
     +'<span class="live-txt" style="color:'+(sync?'var(--orange)':'var(--green)')+'">'+(sync?'SYNCING':'● LIVE')+'</span>'
     +'<button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>'
-    +'<button class="settings-btn" id="openSettingsBtn" title="Settings">⚙</button>'
+    +'<button class="settings-btn" id="openSettingsBtn" title="'+(S.settingsUnlocked||S.teamUnlocked?'Settings':'Settings (password protected)')+'">'+(S.settingsUnlocked||S.teamUnlocked?'⚙':'⚙🔒')+'</button>'
     +'</div></div>';
 
   /* PENDING UPDATE BANNER */
@@ -1687,20 +2773,44 @@ function render() {
       h += '</div>';
     } else {
     var cats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
-    // Summary cards
+    // Hero KPI tiles
     var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
     var outCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
-    h += '<div style="display:flex;gap:8px;padding:14px 20px 0;flex-wrap:wrap;">'
-      +'<div style="flex:1 1 120px;background:var(--surf);border:1px solid var(--border2);border-radius:10px;padding:10px 14px;text-align:center;">'
-      +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:20px;color:var(--gold2);font-weight:600">'+S.items.length+'</div>'
-      +'<div style="font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px">Total Items</div></div>'
-      +'<div style="flex:1 1 120px;background:var(--surf);border:1px solid var(--orng-bd);border-radius:10px;padding:10px 14px;text-align:center;">'
-      +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:20px;color:var(--orange);font-weight:600">'+lowCnt+'</div>'
-      +'<div style="font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px">Low Stock</div></div>'
-      +'<div style="flex:1 1 120px;background:var(--surf);border:1px solid var(--red-bd);border-radius:10px;padding:10px 14px;text-align:center;">'
-      +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:20px;color:var(--red);font-weight:600">'+outCnt+'</div>'
-      +'<div style="font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px">Out of Stock</div></div>'
+    var origCnt= Array.from(new Set(S.items.map(function(i){ return i.origin; }))).length;
+    var totBalDash = S.items.reduce(function(s,i){ return s+Number(i.balance); }, 0);
+    var healthCls = outCnt>0 ? 'kpi-crit' : lowCnt>0 ? 'kpi-warn' : 'kpi-good';
+    var healthLbl = outCnt>0 ? outCnt+' out · '+lowCnt+' low' : lowCnt>0 ? lowCnt+' low · all in stock' : 'All healthy';
+    h += '<div class="kpi-row">'
+      +'<div class="kpi-tile">'
+      +'<div class="kpi-row-top"><span class="kpi-icon">☕</span><span class="kpi-lbl">Total Stock</span></div>'
+      +'<div class="kpi-val" style="color:var(--gold3)">'+Math.round(totBalDash).toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-sub"><span class="kpi-pulse-dot"></span>'+S.items.length+' items live</div>'
+      +'</div>'
+      +'<div class="kpi-tile">'
+      +'<div class="kpi-row-top"><span class="kpi-icon">🌍</span><span class="kpi-lbl">Origins</span></div>'
+      +'<div class="kpi-val" style="color:var(--gold2)">'+origCnt+'</div>'
+      +'<div class="kpi-sub">distinct sources</div>'
+      +'</div>'
+      +'<div class="kpi-tile '+healthCls+'" id="kpiHealthTile" style="cursor:pointer" title="Click to view alert details">'
+      +'<div class="kpi-row-top"><span class="kpi-icon">'+(outCnt?'🚨':lowCnt?'⚠':'✓')+'</span><span class="kpi-lbl">Stock Health</span></div>'
+      +'<div class="kpi-val" style="color:'+(outCnt?'var(--red)':lowCnt?'var(--orange)':'var(--green)')+'">'+(outCnt+lowCnt)+'</div>'
+      +'<div class="kpi-sub">'+esc(healthLbl)+'</div>'
+      +'</div>'
+      +'<div class="kpi-tile">'
+      +'<div class="kpi-row-top"><span class="kpi-icon">📥</span><span class="kpi-lbl">In Today</span></div>'
+      +'<div class="kpi-val" style="color:var(--green)">+'+todIn.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-sub">stock received</div>'
+      +'</div>'
+      +'<div class="kpi-tile">'
+      +'<div class="kpi-row-top"><span class="kpi-icon">📤</span><span class="kpi-lbl">Out Today</span></div>'
+      +'<div class="kpi-val" style="color:'+(todOut?'var(--red)':'var(--cream3)')+'">'+(todOut?'−':'')+todOut.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-sub">stock used</div>'
+      +'</div>'
       +'</div>';
+
+    /* (Alerts shelf removed — now shown only as a popup modal, opened via header
+       badge button or the KPI Stock Health tile. See renderAlertsPopup() below.) */
+
     h += '<div class="filter-row"><div class="chips">'
       +cats.map(function(c){ return '<button class="chip'+(S.filter===c?' on':'')+'" data-filter="'+esc(c)+'">'+esc(c)+'</button>'; }).join('')
       +'</div>'
@@ -1740,18 +2850,193 @@ function render() {
       h += '</div>';
     }
     } // end skeleton else
-    if(S.history.length) {
-      h += '<div class="section-label">Recent Movements</div>';
-      h += '<div class="hist-panel"><div class="hist-head"><span>Movement Log</span><span style="font-size:9px">Last '+Math.min(S.history.length,20)+' records</span></div><div class="hist-scroll">';
-      S.history.slice(0,20).forEach(function(e){
-        var isIn = e.type==='IN';
-        h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
-          +'<span class="hist-name">'+esc(e.itemName)+'</span>'
-          +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
-          +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
+
+    /* (Recent Movements panel was here — moved to bottom of dashboard, after Team Updates.) */
+
+    /* ── 📈 Usage Insights — Origin-by-Origin ──────────── */
+    var todOut7  = Math.round(usageTotalOut(7) * 10)/10;
+    var todOut30 = Math.round(usageTotalOut(30) * 10)/10;
+    var topMov   = usageTopMovers(7, 5);
+    var atRisk   = usageAtRisk(5);
+    var origins  = usageByOrigin();
+    // Find max 7d outflow for proportional bar scaling
+    var maxOut7 = origins.reduce(function(m,o){ return Math.max(m, o.out7); }, 0);
+    var maxOut30= origins.reduce(function(m,o){ return Math.max(m, o.out30); }, 0);
+    var maxOutT = origins.reduce(function(m,o){ return Math.max(m, o.outToday); }, 0);
+
+    h += '<div class="usage-card">'
+      +'<div class="usage-head">'
+      +'<div class="usage-title">📈 Usage Insights<span class="usage-title-sub">origin-by-origin · last 7 / 30 days</span></div>'
+      +'</div>'
+      // Top-line summary strip
+      +'<div class="usage-summary">'
+      +'<div class="usage-sum-tile"><div class="usage-sum-lbl">Today (Out)</div>'
+      +'<div class="usage-sum-val" style="color:'+(todOut?'var(--red)':'var(--cream)')+'">'+todOut.toLocaleString()+'<span class="u-unit">kg</span></div></div>'
+      +'<div class="usage-sum-tile"><div class="usage-sum-lbl">Last 7 days</div>'
+      +'<div class="usage-sum-val" style="color:var(--gold2)">'+todOut7.toLocaleString()+'<span class="u-unit">kg out</span></div></div>'
+      +'<div class="usage-sum-tile"><div class="usage-sum-lbl">Last 30 days</div>'
+      +'<div class="usage-sum-val" style="color:var(--gold3)">'+todOut30.toLocaleString()+'<span class="u-unit">kg out</span></div></div>'
+      +'</div>'
+      // Origin breakdown
+      +'<div class="origin-section-lbl">By Origin</div>';
+    if(!origins.length) {
+      h += '<div class="usage-empty" style="text-align:center;padding:14px">No origins to break down yet — add items with origin tags.</div>';
+    } else {
+      h += '<div class="origin-grid">';
+      origins.forEach(function(o){
+        var hasIssue = o.outCount>0 ? 'has-out' : o.lowCount>0 ? 'has-low' : '';
+        var pctT  = maxOutT  > 0 ? Math.min(100, (o.outToday / maxOutT) * 100) : 0;
+        var pct7  = maxOut7  > 0 ? Math.min(100, (o.out7    / maxOut7) * 100) : 0;
+        var pct30 = maxOut30 > 0 ? Math.min(100, (o.out30   / maxOut30)* 100) : 0;
+        h += '<div class="origin-card '+hasIssue+'">'
+          +'<div class="origin-card-head">'
+          +'<div><div class="origin-name">'+esc(o.origin)+'</div>'
+          +'<div class="origin-meta">'+o.itemCount+' item'+(o.itemCount!==1?'s':'')+'</div></div>'
+          +'<div class="origin-statuses">'
+          +(o.outCount>0 ? '<span class="origin-pill out">'+o.outCount+' out</span>' : '')
+          +(o.lowCount>0 ? '<span class="origin-pill low">'+o.lowCount+' low</span>' : '')
+          +(o.outCount===0 && o.lowCount===0 ? '<span class="origin-pill healthy">✓ ok</span>' : '')
+          +'</div></div>'
+          +'<div class="origin-balance-lbl">On Hand</div>'
+          +'<div class="origin-balance">'+o.balance.toLocaleString()+'<span class="u-unit">'+esc(o.unit)+'</span></div>'
+          +'<div class="origin-bar-wrap">'
+          // Today
+          +'<div class="origin-bar-row">'
+          +'<span class="origin-bar-lbl">Today</span>'
+          +'<span class="origin-bar-track"><span class="origin-bar-fill today-bar" style="width:'+pctT+'%"></span></span>'
+          +'<span class="origin-bar-val'+(o.outToday===0?' zero':'')+'">'+(o.outToday>0?'-'+o.outToday:'0')+' '+esc(o.unit)+'</span>'
+          +'</div>'
+          // 7d
+          +'<div class="origin-bar-row">'
+          +'<span class="origin-bar-lbl">7d</span>'
+          +'<span class="origin-bar-track"><span class="origin-bar-fill" style="width:'+pct7+'%"></span></span>'
+          +'<span class="origin-bar-val'+(o.out7===0?' zero':'')+'">'+(o.out7>0?'-'+o.out7:'0')+' '+esc(o.unit)+'</span>'
+          +'</div>'
+          // 30d
+          +'<div class="origin-bar-row">'
+          +'<span class="origin-bar-lbl">30d</span>'
+          +'<span class="origin-bar-track"><span class="origin-bar-fill thirty-bar" style="width:'+pct30+'%"></span></span>'
+          +'<span class="origin-bar-val'+(o.out30===0?' zero':'')+'">'+(o.out30>0?'-'+o.out30:'0')+' '+esc(o.unit)+'</span>'
+          +'</div>'
+          +'</div>'
+          +(o.topItemName
+            ? '<div class="origin-top">🔥 Top mover: <strong>'+esc(o.topItemName)+'</strong> · '+o.topItemQty+' '+esc(o.unit)+'</div>'
+            : '<div class="origin-top empty">No outflow recorded in the last 7 days.</div>')
+          +'</div>';
       });
-      h += '</div></div>';
+      h += '</div>';
+    }
+
+    // Footer row: Top Movers + At Risk
+    h += '<div class="usage-foot-grid">'
+      +'<div class="usage-foot-card"><div class="usage-foot-lbl">🔥 Top Movers <span style="color:var(--cream3);font-weight:400;letter-spacing:0;text-transform:none;font-size:9px">(7d)</span></div>'
+      +(topMov.length
+        ? '<ul class="usage-list">'+topMov.map(function(m){
+            return '<li><span class="u-name">'+esc(m.name)+'</span><span class="u-qty">'+m.qty+' '+esc(m.unit)+'</span></li>';
+          }).join('')+'</ul>'
+        : '<div class="usage-empty">No outflow recorded yet.</div>')
+      +'</div>'
+      +'<div class="usage-foot-card"><div class="usage-foot-lbl">⚠ At Risk <span style="color:var(--cream3);font-weight:400;letter-spacing:0;text-transform:none;font-size:9px">(days remaining)</span></div>'
+      +(atRisk.length
+        ? '<ul class="usage-list">'+atRisk.map(function(r){
+            var days = r.days===null ? '—' : r.days+'d';
+            var cls = r.status==='OUT' || (r.days!==null && r.days<=3) ? 'crit' : 'warn';
+            var label = r.status==='OUT' ? 'OUT' : days;
+            return '<li><span class="u-name">'+esc(r.item.name)+'</span>'
+              +'<span class="usage-risk-days '+cls+'">'+label+'</span></li>';
+          }).join('')+'</ul>'
+        : '<div class="usage-empty">All items healthy ✓</div>')
+      +'</div>'
+      +'</div>'
+      +'</div>';
+
+    /* (Team Updates section removed per user request.) */
+
+    /* ══════════════════════════════════════════════════
+       RECENT MOVEMENTS — moved to bottom of dashboard
+       Today / Week / Month / All tabs · search · CSV
+    ══════════════════════════════════════════════════ */
+    if(S.history.length) {
+      var movs = filteredMovements();
+      var groups = groupByDay(movs);
+      var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+      var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+      var net = totalIn - totalOut;
+
+      var cntT={today:0,week:0,month:0,all:S.history.length};
+      var cToday = (function(){var t=new Date();t.setHours(0,0,0,0);return t.getTime();})();
+      var cWeek  = Date.now()-7*24*60*60*1000;
+      var cMonth = Date.now()-30*24*60*60*1000;
+      S.history.forEach(function(e){
+        var ts = new Date(e.ts).getTime();
+        if (ts>=cToday) cntT.today++;
+        if (ts>=cWeek)  cntT.week++;
+        if (ts>=cMonth) cntT.month++;
+      });
+
+      h += '<div class="section-label">Recent Movements</div>';
+      h += '<div class="mov-panel">';
+      h += '<div class="mov-head">'
+        +'<div class="mov-head-left">'
+        +'<div class="mov-head-icon">📊</div>'
+        +'<div><div class="mov-head-title">Movement Log</div>'
+        +'<div class="mov-head-sub">'+periodLabel(S.movPeriod)+' · '+movs.length+' record'+(movs.length===1?'':'s')+'</div></div>'
+        +'</div>'
+        +'<button class="mov-csv-btn" id="movCsvBtn" title="Download CSV for the selected period">⬇ Export CSV</button>'
+        +'</div>';
+      h += '<div class="mov-tabs">'
+        +'<button class="mov-tab'+(S.movPeriod==='today'?' active':'')+'" data-movperiod="today">📅 Today <span class="mov-tab-count">'+cntT.today+'</span></button>'
+        +'<button class="mov-tab'+(S.movPeriod==='week'?' active':'')+'" data-movperiod="week">📆 Week <span class="mov-tab-count">'+cntT.week+'</span></button>'
+        +'<button class="mov-tab'+(S.movPeriod==='month'?' active':'')+'" data-movperiod="month">🗓 Month <span class="mov-tab-count">'+cntT.month+'</span></button>'
+        +'<button class="mov-tab'+(S.movPeriod==='all'?' active':'')+'" data-movperiod="all">∞ All <span class="mov-tab-count">'+cntT.all+'</span></button>'
+        +'</div>';
+      h += '<div class="mov-toolbar">'
+        +'<input class="mov-search" id="movSearchInp" type="text" placeholder="Search product or note…" value="'+esc(S.movSearch)+'">'
+        +'<select class="mov-filter" id="movTypeFilterSel">'
+        +'<option value="All"'+(S.movTypeFilter==='All'?' selected':'')+'>All types</option>'
+        +'<option value="IN"'+(S.movTypeFilter==='IN'?' selected':'')+'>📥 IN only</option>'
+        +'<option value="OUT"'+(S.movTypeFilter==='OUT'?' selected':'')+'>📤 OUT only</option>'
+        +'</select>'
+        +'</div>';
+      h += '<div class="mov-stats">'
+        +'<div class="mov-stat"><div class="mov-stat-lbl">Total IN</div>'
+          +'<div class="mov-stat-val" style="color:var(--green)">+'+(Math.round(totalIn*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
+        +'<div class="mov-stat"><div class="mov-stat-lbl">Total OUT</div>'
+          +'<div class="mov-stat-val" style="color:var(--red)">−'+(Math.round(totalOut*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
+        +'<div class="mov-stat"><div class="mov-stat-lbl">Net Change</div>'
+          +'<div class="mov-stat-val" style="color:'+(net>=0?'var(--green)':'var(--red)')+'">'+(net>=0?'+':'')+(Math.round(net*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
+        +'</div>';
+      h += '<div class="mov-list">';
+      if (!movs.length) {
+        h += '<div class="mov-empty"><span class="mov-empty-icon">📭</span>No movements match your filter.<br>Try a different period or clear the search.</div>';
+      } else {
+        groups.forEach(function(g){
+          var dStr;
+          var today = (function(){var t=new Date();t.setHours(0,0,0,0);return t.getTime();})();
+          var yest  = today - 24*60*60*1000;
+          if (g.date.getTime() >= today) dStr = 'TODAY · ' + g.date.toLocaleDateString([], {month:'short',day:'numeric'});
+          else if (g.date.getTime() >= yest) dStr = 'YESTERDAY · ' + g.date.toLocaleDateString([], {month:'short',day:'numeric'});
+          else dStr = g.date.toLocaleDateString([], {weekday:'long',month:'short',day:'numeric'});
+
+          h += '<div class="mov-day-hdr"><span>'+dStr+'</span>'
+            +'<span class="mov-day-hdr-right">'
+            +(g.totalIn>0?'<span style="color:var(--green)">+'+(Math.round(g.totalIn*10)/10)+'</span>':'')
+            +(g.totalIn>0 && g.totalOut>0?' · ':'')
+            +(g.totalOut>0?'<span style="color:var(--red)">−'+(Math.round(g.totalOut*10)/10)+'</span>':'')
+            +' kg</span></div>';
+
+          g.items.slice().sort(function(a,b){return new Date(b.ts)-new Date(a.ts);}).forEach(function(e){
+            var isIn = e.type==='IN';
+            h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
+              +'<span class="hist-name">'+esc(e.itemName)+'</span>'
+              +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
+              +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+              +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
+          });
+        });
+      }
+      h += '</div>'; // mov-list
+      h += '</div>'; // mov-panel
     }
   }
 
@@ -1932,9 +3217,54 @@ function render() {
       +'<button class="btn-clrhist" id="clearHistBtn">🗑 Clear History</button>'
       +'<button class="btn-export" id="exportTeamBtn">📥 Export CSV</button>'
       +'<button class="btn-pwd" id="toggleCatMgr">🗂 Categories</button>'
-      +'<button class="btn-pwd" id="toggleCPwd">🔑 Change Password</button>'
+      +'<button class="btn-pwd" id="toggleSnaps">📸 Snapshots'
+        +(Object.keys(S.snapshots||{}).length?' <span style="background:var(--gold);color:var(--bg);border-radius:9px;padding:0 6px;font-size:9px;margin-left:3px">'+Object.keys(S.snapshots).length+'</span>':'')
+      +'</button>'
       +'<button class="btn-add" id="addItemBtn">+ New Item</button>'
       +'</div></div>';
+
+    /* ── 📸 Snapshots Panel ── */
+    if(S.showSnapshotsPanel) {
+      var snapKeys = snapshotKeysSorted();
+      h += '<div class="snap-section">'
+        +'<div class="snap-head">'
+        +'<div class="snap-title">📸 End-of-Day Snapshots'
+        +(snapKeys.length?' <span style="color:var(--cream3);font-weight:400;font-size:10px;letter-spacing:0.04em;text-transform:none;margin-left:4px">('+snapKeys.length+' captured)</span>':'')
+        +'</div>'
+        +'<div class="snap-actions">'
+        +'<button class="snap-take-btn" id="takeSnapBtn">📸 Take Snapshot Now</button>'
+        +'<button class="snap-toggle-btn" id="closeSnapsBtn">✕ Close</button>'
+        +'</div></div>'
+        +'<div class="snap-body">';
+      if(!snapKeys.length) {
+        h += '<div class="snap-empty">No snapshots yet. Click <strong style="color:var(--green)">Take Snapshot Now</strong> to capture today\'s closing balances. Snapshots auto-capture once per day on the first load of a new day.</div>';
+      } else {
+        h += '<div class="snap-list">';
+        snapKeys.slice(0, 14).forEach(function(k, idx){
+          var s = S.snapshots[k];
+          var prevK = snapKeys[idx+1];
+          var d = snapshotDelta(k, prevK);
+          var deltaTxt, deltaCls;
+          if(!d || d.isFirst) { deltaTxt = '— first'; deltaCls = 'snap-delta-flat'; }
+          else if(d.totalKg > 0) { deltaTxt = '+'+d.totalKg+' kg'; deltaCls = 'snap-delta-up'; }
+          else if(d.totalKg < 0) { deltaTxt = d.totalKg+' kg'; deltaCls = 'snap-delta-down'; }
+          else { deltaTxt = '±0 kg'; deltaCls = 'snap-delta-flat'; }
+          var when = new Date(s.ts);
+          h += '<div class="snap-row">'
+            +'<div class="snap-row-date">'+k+'<small>'+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+esc(s.by||'auto')+'</small></div>'
+            +'<div class="snap-row-num">'+s.totals.totalKg+' <span style="font-size:9px;color:var(--cream3)">kg total</span></div>'
+            +'<div class="snap-row-delta '+deltaCls+'" title="vs previous snapshot">'+deltaTxt+'</div>'
+            +'<div class="snap-row-low snap-hide-sm">'+s.totals.lowCount+' low</div>'
+            +'<div class="snap-row-out snap-hide-sm">'+s.totals.outCount+' out</div>'
+            +'</div>';
+        });
+        h += '</div>';
+        if(snapKeys.length > 14) {
+          h += '<div style="font-size:10px;color:var(--cream3);text-align:center;margin-top:8px">Showing latest 14 of '+snapKeys.length+' snapshots.</div>';
+        }
+      }
+      h += '</div></div>';
+    }
 
     // Category manager panel
     if(S.showCatMgr) {
@@ -1974,29 +3304,6 @@ function render() {
       +'<button class="sort-btn'+(S.dashSort==='status'?' on':'')+'" data-tpsort="status">Status</button>'
       +'</div></div>'
       +'</div>';
-
-    if(S.showCPwd) {
-      h += '<div id="overlay"><div class="pwd-modal">'
-        +'<div class="pwd-modal-hdr">'
-        +'<span style="font-size:24px">🔐</span>'
-        +'<div><div style="font-family:\'Playfair Display\',serif;font-size:17px;color:var(--gold3);font-weight:700">Change Team Password</div>'
-        +'<div style="font-size:10px;color:var(--cream3);margin-top:2px;letter-spacing:0.06em">New password must be at least 6 characters</div>'
-        +'</div></div>'
-        +'<div class="pwd-modal-body">'
-        +'<div class="form-field" style="margin-bottom:12px"><label>Current Password</label>'
-        +'<input type="password" class="inp" id="cpOld" value="'+esc(S.cpOld)+'" autocomplete="new-password" placeholder="Enter current password"></div>'
-        +'<div class="form-field" style="margin-bottom:12px"><label>New Password</label>'
-        +'<input type="password" class="inp" id="cpNew" value="'+esc(S.cpNew)+'" autocomplete="new-password" placeholder="At least 6 characters"></div>'
-        +'<div class="form-field"><label>Confirm New Password</label>'
-        +'<input type="password" class="inp" id="cpConf" value="'+esc(S.cpConf)+'" autocomplete="new-password" placeholder="Repeat new password"></div>'
-        +(S.cpErr?'<div class="err-txt" style="margin-top:10px;font-size:11px">⚠ '+esc(S.cpErr)+'</div>':'')
-        +'</div>'
-        +'<div class="pwd-modal-foot">'
-        +'<button class="btn-save" id="cpSave" style="flex:1;padding:11px">🔑 Update Password</button>'
-        +'<button class="btn-cancel" id="cpCancel" style="padding:11px 18px">Cancel</button>'
-        +'</div>'
-        +'</div></div>';
-    }
 
     if(S.showAddItem && S.newItem) {
       var ni = S.newItem;
@@ -2059,13 +3366,73 @@ function render() {
         +'</span></div>';
     });
     h += '<div class="section-label">Movement History <span style="font-size:9px;color:var(--cream3);font-weight:400;letter-spacing:0;text-transform:none;margin-left:6px">Delete individual entries or clear all history below</span></div>';
+
+    /* ── 🔎 Activity Filter Bar ─────────────────────────── */
+    var actFilterCnt = activeFilterCount();
+    h += '<div style="margin:0 20px 6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
+      +'<button class="actf-toggle-btn" id="actfToggle">🔎 '+(S.showActFilter?'Hide':'Show')+' Filters'
+      +(actFilterCnt?' <span class="actf-active-pill">'+actFilterCnt+'</span>':'')
+      +'</button>'
+      +(actFilterCnt
+        ? '<button class="actf-reset" id="actfReset">↺ Reset filters</button>'
+        : '')
+      +'</div>';
+    if(S.showActFilter) {
+      var af = S.actFilter;
+      h += '<div class="actf-bar">'
+        +'<div class="actf-row">'
+        // Type chips
+        +'<div class="actf-group">'
+        +'<span class="actf-lbl">Type</span>'
+        +['All','IN','OUT','WASTE','ADJ'].map(function(t){
+          var on = af.type===t;
+          var clsTone = '';
+          if(on && t==='IN') clsTone=' on-in';
+          else if(on && t==='OUT') clsTone=' on-out';
+          else if(on && t==='WASTE') clsTone=' on-waste';
+          else if(on && t==='ADJ') clsTone=' on-adj';
+          else if(on) clsTone=' on';
+          return '<button class="actf-chip'+clsTone+'" data-actftype="'+t+'">'+t+'</button>';
+        }).join('')
+        +'</div>'
+        // Range chips
+        +'<div class="actf-group">'
+        +'<span class="actf-lbl">When</span>'
+        +[['today','Today'],['7d','7 days'],['30d','30 days'],['all','All time']].map(function(p){
+          return '<button class="actf-chip'+(af.range===p[0]?' on':'')+'" data-actfrange="'+p[0]+'">'+p[1]+'</button>';
+        }).join('')
+        +'</div>'
+        // Item dropdown
+        +'<div class="actf-group">'
+        +'<span class="actf-lbl">Item</span>'
+        +'<select class="actf-sel" id="actfItem">'
+        +'<option value="All"'+(af.item==='All'?' selected':'')+'>All items</option>'
+        +S.items.slice().sort(function(a,b){ return a.name.localeCompare(b.name); }).map(function(i){
+          return '<option value="'+esc(i.id)+'"'+(String(af.item)===String(i.id)?' selected':'')+'>'+esc(i.name)+'</option>';
+        }).join('')
+        +'</select>'
+        +'</div>'
+        // Search
+        +'<div class="actf-group">'
+        +'<span class="actf-lbl">Search</span>'
+        +'<input class="actf-search" id="actfSearch" placeholder="name or note…" value="'+esc(af.search||'')+'">'
+        +'</div>'
+        +'</div>';
+      // Show summary line
+      var preview = filterHistory(S.history);
+      h += '<div class="actf-summary">Showing <strong>'+preview.length+'</strong> of <strong>'+S.history.length+'</strong> entries.</div>';
+      h += '</div>';
+    }
+
     if(!S.history.length) {
       h += '<div class="hist-panel" style="margin:0 20px 16px"><div style="padding:28px;text-align:center;font-size:11px;color:var(--cream3)">No movement history yet.</div></div>';
     } else {
+      // Apply activity filter
+      var filteredHist = filterHistory(S.history);
       // Group entries by date
       var grouped = {};
       var groupOrder = [];
-      S.history.forEach(function(e){
+      filteredHist.forEach(function(e){
         var day = new Date(e.ts).toDateString();
         if(!grouped[day]){ grouped[day]=[]; groupOrder.push(day); }
         grouped[day].push(e);
@@ -2076,7 +3443,13 @@ function render() {
       groupOrder.forEach(function(d){ flatEntries += grouped[d].length; });
       var hasMore = flatEntries > totalShown;
 
-      h += '<div class="hist-panel" style="margin:0 20px 16px"><div class="hist-head"><span>All Movements ('+S.history.length+' total)</span><span style="font-size:9px;color:var(--red)">🗑 = delete that entry permanently</span></div><div class="hist-scroll" style="max-height:340px">';
+      var titleSuffix = filteredHist.length === S.history.length
+        ? '('+S.history.length+' total)'
+        : '('+filteredHist.length+' of '+S.history.length+' filtered)';
+      h += '<div class="hist-panel" style="margin:0 20px 16px"><div class="hist-head"><span>All Movements '+titleSuffix+'</span><span style="font-size:9px;color:var(--red)">🗑 = delete that entry permanently</span></div><div class="hist-scroll" style="max-height:340px">';
+      if(!filteredHist.length) {
+        h += '<div style="padding:28px;text-align:center;font-size:11px;color:var(--cream3)">No entries match your filters. <button class="actf-reset" id="actfResetInline">Reset filters</button></div>';
+      }
       var shownSoFar = 0;
       for(var gi = 0; gi < groupOrder.length; gi++) {
         var day = groupOrder[gi];
@@ -2148,57 +3521,314 @@ function render() {
     var clk = fmtClock();
     var themeSwatches = {dark:'linear-gradient(135deg,#1a1208,#c8923c)',light:'linear-gradient(135deg,#f5f0e8,#9a6010)',forest:'linear-gradient(135deg,#101a10,#5ab55a)',ocean:'linear-gradient(135deg,#0c1a28,#5090d8)'};
     var themeLabels  = {dark:'Dark ☕',light:'Light ☀',forest:'Forest 🌿',ocean:'Ocean 🌊'};
+    var sTab = S.settingsTab || 'general';
+
     h += '<div id="settings-overlay">'
-      +'<div class="settings-panel">'
-      +'<div class="settings-hdr">'
-      +'<div class="settings-title">⚙ Global Settings</div>'
-      +'<button class="btn-cancel" style="font-size:10px;padding:4px 14px" id="closeSettingsBtn">✕ Close</button>'
-      +'</div>'
-      +'<div class="settings-body">'
+      +'<div class="settings-panel premium">'
 
-      /* ── Live Clock ── */
-      +'<div>'
-      +'<div class="settings-sec-lbl">🕐 Current Time</div>'
-      +'<div class="settings-clock" id="settingsClock">'+clk.hm+'<span class="settings-clock-secs">:'+clk.s+'</span></div>'
-      +'<div class="settings-clock-date" id="settingsClockDate">'+clk.date+'</div>'
+      /* ── Premium Header ── */
+      +'<div class="settings-hdr premium">'
+      +'<div class="settings-hdr-flex">'
+      +'<div class="settings-hdr-icon">⚙</div>'
+      +'<div class="settings-hdr-text">'
+      +'<div class="settings-title-premium">Settings</div>'
+      +'<div class="settings-subtitle">Personalize your dashboard</div>'
+      +'</div>'
+      +'</div>'
+      +'<button class="btn-cancel" style="font-size:10px;padding:5px 14px" id="closeSettingsBtn">✕ Close</button>'
       +'</div>'
 
-      /* ── Theme ── */
-      +'<div>'
-      +'<div class="settings-sec-lbl">🎨 UI Theme</div>'
-      +'<div class="theme-grid">'
-      +['dark','light','forest','ocean'].map(function(tid){
-        return '<div class="theme-opt'+(S.theme===tid?' active':'')+'" data-settheme="'+tid+'">'
-          +'<div class="theme-swatch" style="background:'+themeSwatches[tid]+'"></div>'
-          +'<div class="theme-name">'+themeLabels[tid]+'</div>'
+      /* ── Tabs ── */
+      +'<div class="settings-tabs">'
+      +'<button class="settings-tab'+(sTab==='general'?' active':'')+'" data-stab="general"><span class="settings-tab-icon">🎨</span>General</button>'
+      +'<button class="settings-tab'+(sTab==='alerts'?' active':'')+'" data-stab="alerts"><span class="settings-tab-icon">🔔</span>Alerts</button>'
+      +'<button class="settings-tab'+(sTab==='data'?' active':'')+'" data-stab="data"><span class="settings-tab-icon">💾</span>Data</button>'
+      +'<button class="settings-tab'+(sTab==='security'?' active':'')+'" data-stab="security"><span class="settings-tab-icon">🔐</span>Security</button>'
+      +'<button class="settings-tab'+(sTab==='about'?' active':'')+'" data-stab="about"><span class="settings-tab-icon">ℹ️</span>About</button>'
+      +'</div>'
+
+      +'<div class="settings-body premium">';
+
+    /* ════════════════════════════════════════════
+       TAB 1: GENERAL — clock, theme, accent
+    ════════════════════════════════════════════ */
+    if (sTab === 'general') {
+      // Live Clock
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">🕐</span>Current Time</div>'
+        +'<div class="settings-clock premium" id="settingsClock">'+clk.hm+'<span class="settings-clock-secs premium">:'+clk.s+'</span></div>'
+        +'<div class="settings-clock-date" id="settingsClockDate">'+clk.date+'</div>'
+        +'</div>';
+
+      // Theme
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">🎨</span>UI Theme</div>'
+        +'<div class="theme-grid premium">'
+        +['dark','light','forest','ocean'].map(function(tid){
+          return '<div class="theme-opt premium'+(S.theme===tid?' active':'')+'" data-settheme="'+tid+'">'
+            +'<div class="theme-swatch" style="background:'+themeSwatches[tid]+'"></div>'
+            +'<div class="theme-name">'+themeLabels[tid]+'</div>'
+            +'</div>';
+        }).join('')
+        +'</div>'
+        +'</div>';
+
+      // Accent
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">🌈</span>Accent Colour</div>'
+        +'<div class="accent-row">'
+        +ACCENT_PRESETS.map(function(p){
+          return '<div class="accent-dot'+(S.accentPreset===p.id?' active':'')+'" title="'+p.label
+            +'" data-setaccent="'+p.id
+            +'" style="background:linear-gradient(135deg,'+p.val+','+p.val3+')"></div>';
+        }).join('')
+        +'<div class="accent-dot'+(S.accentPreset===''?' active':'')+'" title="Reset default" data-setaccent="" '
+        +'style="background:var(--border2);font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--cream3);">↺</div>'
+        +'</div>'
+        +'</div>';
+    }
+
+    /* ════════════════════════════════════════════
+       TAB 2: ALERTS — sound, desktop, snooze, severity
+    ════════════════════════════════════════════ */
+    if (sTab === 'alerts') {
+      var ap = S.alertPrefs || {};
+      var lowItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)!=='OK'; }).length;
+
+      h += '<div class="settings-card" style="background:linear-gradient(135deg,rgba(200,146,60,.06),transparent);">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">📊</span>Alert Status</div>'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;">'
+        +'<div><div style="font-size:12px;color:var(--cream);font-weight:600">Items needing attention</div>'
+        +'<div style="font-size:10px;color:var(--cream3);margin-top:2px">Currently below minimum threshold</div></div>'
+        +'<div style="font-family:\'JetBrains Mono\',monospace;font-size:24px;font-weight:600;color:'+(lowItems?'var(--red)':'var(--green)')+'">'+lowItems+'</div>'
+        +'</div>'
+        +'</div>';
+
+      // Notification methods
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">🔔</span>Notification Methods</div>'
+        +'<div class="settings-row">'
+        +'<div class="settings-row-label">'
+        +'<div class="settings-row-name">🔊 Sound chime</div>'
+        +'<div class="settings-row-desc">Play a soft tone when stock drops below minimum</div>'
+        +'</div>'
+        +'<div class="settings-toggle'+(ap.soundEnabled?' on':'')+'" id="prefSoundToggle"></div>'
+        +'</div>'
+        +'<div class="settings-row">'
+        +'<div class="settings-row-label">'
+        +'<div class="settings-row-name">🖥 Desktop notifications</div>'
+        +'<div class="settings-row-desc">Show a system notification — needs browser permission</div>'
+        +'</div>'
+        +'<div class="settings-toggle'+(ap.desktopNotif?' on':'')+'" id="prefDesktopToggle"></div>'
+        +'</div>'
+        +'</div>';
+
+      // Severity & snooze tuning
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">⚡</span>Sensitivity & Throttling</div>'
+        +'<div class="settings-row">'
+        +'<div class="settings-row-label">'
+        +'<div class="settings-row-name">Critical threshold</div>'
+        +'<div class="settings-row-desc">Mark as 🚨 critical if balance drops below this % of minimum</div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px"><input type="number" class="settings-num-inp" id="prefCritThr" min="10" max="100" step="5" value="'+Math.round((ap.criticalThreshold||0.5)*100)+'"><span style="font-size:11px;color:var(--cream3)">%</span></div>'
+        +'</div>'
+        +'<div class="settings-row">'
+        +'<div class="settings-row-label">'
+        +'<div class="settings-row-name">Snooze duration</div>'
+        +'<div class="settings-row-desc">After alerting, suppress repeats for this long</div>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px"><input type="number" class="settings-num-inp" id="prefSnooze" min="5" max="1440" step="5" value="'+(ap.snoozeMinutes||60)+'"><span style="font-size:11px;color:var(--cream3)">min</span></div>'
+        +'</div>'
+        +'</div>';
+
+      // Test alert
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">🧪</span>Test Alerts</div>'
+        +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+        +'<button class="settings-mini-btn" id="prefTestSound">🔊 Play chime</button>'
+        +'<button class="settings-mini-btn" id="prefTestDesktop">🖥 Send test notification</button>'
+        +'<button class="settings-mini-btn" id="prefRescan">🔄 Rescan stock now</button>'
+        +'</div>'
+        +'<div style="font-size:10px;color:var(--cream3);margin-top:10px;line-height:1.6">'
+        +'Alerts also fire automatically whenever stock changes via Firebase sync. The sender to the Roastery already runs in the background.'
+        +'</div>'
+        +'</div>';
+    }
+
+    /* ════════════════════════════════════════════
+       TAB 3: DATA — backup, import, movements CSV
+    ════════════════════════════════════════════ */
+    if (sTab === 'data') {
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">📥</span>Movement Records (CSV)</div>'
+        +'<div style="font-size:11px;color:var(--cream2);margin-bottom:10px;line-height:1.6">'
+        +'Download every IN / OUT / WASTE movement, grouped by day, with totals — ready for Excel or accounting.'
+        +'</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px">'
+        +'<button class="settings-mini-btn" id="csvDay">📅 Today</button>'
+        +'<button class="settings-mini-btn" id="csvWeek">📆 Last 7 days</button>'
+        +'<button class="settings-mini-btn" id="csvMonth">🗓 Last 30 days</button>'
+        +'<button class="settings-mini-btn" id="csvAll">∞ All time</button>'
+        +'</div>'
+        +'</div>';
+
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">💾</span>Full Backup (JSON)</div>'
+        +'<div class="dp-row">'
+        +'<button class="dp-btn" id="dpExportBtn"><span>⬇</span><span>Export Backup</span></button>'
+        +(S.teamUnlocked
+          ? '<button class="dp-btn imp" id="dpImportBtn"'+(S.importBusy?' disabled':'')+'><span>⬆</span><span>'+(S.importBusy?'Reading…':'Import Backup')+'</span></button>'
+            +'<input type="file" id="dpImportFile" accept="application/json,.json" style="display:none">'
+          : '')
+        +'</div>'
+        +'<div class="dp-note" style="margin-top:10px">'
+        +'Includes <strong style="color:var(--cream2)">items, history, comments, snapshots, team updates and categories</strong>. Password is never exported.'
+        +(S.teamUnlocked
+          ? ' Import will <strong style="color:var(--orange)">overwrite all current data</strong>.'
+          : ' 🔒 Unlock Team Panel to import.')
+        +'</div>'
+        +'</div>';
+    }
+
+    /* ════════════════════════════════════════════
+       TAB 4: SECURITY
+    ════════════════════════════════════════════ */
+    if (sTab === 'security') {
+      if (S.teamUnlocked) {
+        h += '<div class="settings-card">'
+          +'<div class="settings-card-title"><span class="settings-card-icon">🔐</span>Team Password</div>'
+          +'<div style="font-size:11px;color:var(--cream2);margin-bottom:12px;line-height:1.6">'
+          +'The team password gates the Team Panel where stock items are added, edited, and balanced.'
+          +'</div>'
+          +'<button class="btn-unlock" id="settingsCPwdBtn" style="font-size:13px;padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;width:100%">'
+          +'<span>🔑</span><span>Change Team Password</span></button>'
+          +'<div style="font-size:10px;color:var(--cream3);margin-top:8px;line-height:1.6;text-align:center">'
+          +'You\'ll need the current password to set a new one.'
+          +'</div>'
           +'</div>';
-      }).join('')
-      +'</div>'
-      +'</div>'
+      } else {
+        h += '<div class="settings-card">'
+          +'<div class="settings-card-title"><span class="settings-card-icon">🔒</span>Team Locked</div>'
+          +'<div style="padding:14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;font-size:11px;color:var(--cream2);line-height:1.7;text-align:center">'
+          +'🔒 Unlock <strong style="color:var(--cream)">Team Panel</strong> first to manage security settings.<br>'
+          +'<span style="font-size:10px;color:var(--cream3);display:block;margin-top:6px">Click the 🔒 Team Panel button in the navigation bar.</span>'
+          +'</div>'
+          +'</div>';
+      }
+    }
 
-      /* ── Accent Colour ── */
-      +'<div>'
-      +'<div class="settings-sec-lbl">🌈 Accent Colour</div>'
-      +'<div class="accent-row">'
-      +ACCENT_PRESETS.map(function(p){
-        return '<div class="accent-dot'+(S.accentPreset===p.id?' active':'')+'" title="'+p.label
-          +'" data-setaccent="'+p.id
-          +'" style="background:linear-gradient(135deg,'+p.val+','+p.val3+')"></div>';
-      }).join('')
-      +'<div class="accent-dot'+(S.accentPreset===''?' active':'')+'" title="Reset default" data-setaccent="" '
-      +'style="background:var(--border2);font-size:13px;display:flex;align-items:center;justify-content:center;color:var(--cream3);">↺</div>'
-      +'<span style="font-size:10px;color:var(--cream3);margin-left:4px">↺ resets to default</span>'
-      +'</div>'
-      +'</div>'
+    /* ════════════════════════════════════════════
+       TAB 5: ABOUT
+    ════════════════════════════════════════════ */
+    if (sTab === 'about') {
+      h += '<div class="about-card">'
+        +'<div class="about-card-logo">☕</div>'
+        +'<div class="about-card-name">Windmill Cafe & Roastery</div>'
+        +'<div class="about-card-tag">Live Stock Dashboard</div>'
+        +'<div class="about-card-meta">'
+        +'<strong style="color:var(--gold2)">Real-time</strong> · Firebase sync<br>'
+        +'<strong style="color:var(--gold2)">Tracked items</strong> · '+S.items.length+'<br>'
+        +'<strong style="color:var(--gold2)">Movement records</strong> · '+S.history.length+'<br>'
+        +'<strong style="color:var(--gold2)">Theme & prefs</strong> · saved to this browser'
+        +'</div>'
+        +'</div>';
 
-      /* ── Info ── */
-      +'<div style="padding:12px 16px;background:var(--bg2);border-radius:10px;border:1px solid var(--border);font-size:10px;color:var(--cream3);line-height:1.7">'
-      +'<strong style="color:var(--gold2)">Windmill Cafe & Roastery</strong><br>'
-      +'Firebase Realtime Sync · Theme & accent saved to this browser.'
-      +'</div>'
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">⌨️</span>Keyboard Shortcuts</div>'
+        +'<div style="display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:11px;color:var(--cream2);">'
+        +'<kbd style="background:var(--bg);border:1px solid var(--border2);padding:2px 7px;border-radius:4px;font-family:\'JetBrains Mono\',monospace;font-size:10px">Ctrl + Enter</kbd><span>Post team update</span>'
+        +'<kbd style="background:var(--bg);border:1px solid var(--border2);padding:2px 7px;border-radius:4px;font-family:\'JetBrains Mono\',monospace;font-size:10px">Esc</kbd><span>Close any modal</span>'
+        +'</div>'
+        +'</div>';
 
-      +'</div>' /* end .settings-body */
+      h += '<div class="danger-card">'
+        +'<div class="danger-card-title"><span>⚠</span>Danger Zone</div>'
+        +'<div style="font-size:11px;color:var(--cream2);margin-bottom:10px;line-height:1.6">'
+        +'Reset alert preferences to factory defaults — sound off, desktop off, 60 min snooze, 50% critical threshold.'
+        +'</div>'
+        +'<button class="btn-danger" id="resetAlertPrefs">🔄 Reset alert preferences</button>'
+        +'</div>';
+    }
+
+    h += '</div>' /* end .settings-body */
       +'</div></div>'; /* end .settings-panel + #settings-overlay */
+  }
+
+  /* ══════════════════════════════════════════════════════
+     ALERTS POPUP — opens via header badge or auto on first sync
+  ══════════════════════════════════════════════════════ */
+  if (S.showAlertsPopup) {
+    var pAlerts = S.items.map(function(i){
+      var sev = getSeverity(i.balance, i.threshold);
+      if (sev === 'OK') return null;
+      return { item:i, sev:sev, daysLeft: estimateDaysLeft(i.id, i.balance) };
+    }).filter(function(x){ return x; });
+    pAlerts.sort(function(a,b){
+      if (a.sev !== b.sev) return a.sev==='CRITICAL' ? -1 : 1;
+      return a.item.balance - b.item.balance;
+    });
+    var critN = pAlerts.filter(function(a){return a.sev==='CRITICAL';}).length;
+    var warnN = pAlerts.length - critN;
+    var hasAlerts = pAlerts.length > 0;
+
+    h += '<div id="alerts-popup">'
+      +'<div class="alerts-popup-panel'+(hasAlerts?'':' no-alerts')+'">'
+      +'<div class="alerts-popup-hdr">'
+      +'<div class="alerts-popup-title-wrap">'
+      +'<div class="alerts-popup-icon">'+(hasAlerts?'⚠':'✓')+'</div>'
+      +'<div class="alerts-popup-text">'
+      +'<div class="alerts-popup-title">'+(hasAlerts
+        ? pAlerts.length+' Stock Alert'+(pAlerts.length===1?'':'s')+' — Action Needed'
+        : 'All Stock Healthy')+'</div>'
+      +'<div class="alerts-popup-sub">'+(hasAlerts
+        ? critN+' critical · '+warnN+' warning'
+        : S.items.length+' items above minimum threshold')+'</div>'
+      +'</div></div>'
+      +'<button class="btn-cancel" style="font-size:11px;padding:6px 14px" id="closeAlertsPopupBtn">✕ Close</button>'
+      +'</div>'
+      +'<div class="alerts-popup-body">';
+    if (!hasAlerts) {
+      h += '<div class="alerts-popup-empty">'
+        +'<div style="font-size:38px;margin-bottom:10px">✅</div>'
+        +'<div style="font-size:14px;font-weight:700;margin-bottom:6px">Everything looks great</div>'
+        +'<div style="font-size:11px;color:var(--cream3);line-height:1.7">Every tracked item is currently at or above its minimum threshold. The Roastery has nothing urgent to act on.</div>'
+        +'</div>';
+    } else {
+      h += '<div class="alerts-list" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">';
+      pAlerts.forEach(function(a){
+        var isCrit = a.sev === 'CRITICAL';
+        var icon = a.item.balance===0 ? '🚨' : isCrit ? '⛔' : '⚠️';
+        var daysTxt = '';
+        if (a.item.balance === 0) daysTxt = '<div class="alert-card-days" style="color:var(--red)">📍 Out of stock — restock urgently</div>';
+        else if (a.daysLeft != null) {
+          var dColor = a.daysLeft <= 3 ? 'var(--red)' : a.daysLeft <= 7 ? 'var(--orange)' : 'var(--cream3)';
+          daysTxt = '<div class="alert-card-days" style="color:'+dColor+'">⏱ ~'+a.daysLeft+' day'+(a.daysLeft===1?'':'s')+' of stock left</div>';
+        }
+        h += '<div class="alert-card '+(isCrit?'':'warn')+'" title="'+esc(a.item.name)+'">'
+          +'<div class="alert-card-icon">'+icon+'</div>'
+          +'<div class="alert-card-body">'
+          +'<div class="alert-card-name">'+esc(a.item.name)+'</div>'
+          +'<div class="alert-card-detail">'
+          +'<span class="alert-card-bal">'+a.item.balance+'</span>'
+          +' / '+a.item.threshold+' '+esc(a.item.unit)+' min'
+          +'</div>'
+          +daysTxt
+          +'</div>'
+          +'</div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>'; // body
+    h += '<div class="alerts-popup-foot">'
+      +'<div class="alerts-popup-foot-meta">'+(hasAlerts
+        ? '💡 Tip: open Settings → Alerts to tune sound, snooze and severity'
+        : 'Last scan: '+new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}))+'</div>'
+      +(hasAlerts
+        ? '<button class="alert-hdr-btn" id="popupSendAlertBtn">📡 Send to Roastery</button>'
+        : '')
+      +'</div>';
+    h += '</div></div>'; // panel + popup
   }
 
   app.innerHTML = h;
@@ -2246,6 +3876,20 @@ function bindEvents() {
   var asnd=g('alertSendBtn');     if(asnd) asnd.onclick=sendManualAlert;
   var mai=g('manualAlertInput');  if(mai) mai.onkeydown=function(e){ if(e.key==='Enter') sendManualAlert(); };
 
+  /* Alerts Popup — opens via header badge or Stock Health KPI tile */
+  var oap=g('openAlertsPopupBtn'); if(oap) oap.onclick=function(){ S.showAlertsPopup=true; render(); };
+  var kht=g('kpiHealthTile');      if(kht) kht.onclick=function(){ S.showAlertsPopup=true; render(); };
+  var cap=g('closeAlertsPopupBtn'); if(cap) cap.onclick=function(){ S.showAlertsPopup=false; render(); };
+  var psa=g('popupSendAlertBtn');
+  if (psa) psa.onclick=function(){
+    S.showAlertsPopup=false;
+    S.showAlertModal=true;
+    render();
+    setTimeout(function(){ var ai=g('manualAlertInput'); if(ai) ai.focus(); },60);
+  };
+  var ap=g('alerts-popup');
+  if(ap) ap.onclick=function(e){ if(e.target===ap){ S.showAlertsPopup=false; render(); } };
+
   /* Login */
   var li=g('loginInput');
   if(li){ li.oninput=function(){ S.loginErr=false; }; li.onkeydown=function(e){ if(e.key==='Enter') doLogin(); }; }
@@ -2285,7 +3929,7 @@ function bindEvents() {
     b.onclick=function(){ deleteItem(Number(this.getAttribute('data-delid'))); };
   });
 
-  var tp=g('toggleCPwd'); if(tp) tp.onclick=function(){ S.showCPwd=!S.showCPwd; render(); };
+  /* Change Password modal field bindings (modal opens from Settings → settingsCPwdBtn) */
   var co=g('cpOld'); if(co) co.oninput=function(){ S.cpOld=this.value; };
   var cn=g('cpNew'); if(cn) cn.oninput=function(){ S.cpNew=this.value; };
   var cc=g('cpConf'); if(cc) cc.oninput=function(){ S.cpConf=this.value; };
@@ -2485,8 +4129,36 @@ function bindEvents() {
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Report copied to clipboard!'); });
   };
   /* ── Settings panel ─────────────────────────────────────────────── */
-  var osb=g('openSettingsBtn'); if(osb) osb.onclick=function(){ S.showSettings=true; render(); };
+  var osb=g('openSettingsBtn');
+  if(osb) osb.onclick=function(){
+    // If user has already unlocked settings this session OR has unlocked the team panel,
+    // open settings immediately. Otherwise show the settings password gate.
+    if (S.settingsUnlocked || S.teamUnlocked) {
+      S.showSettings=true;
+      render();
+    } else {
+      S.showSettingsLogin = true;
+      S.sLoginVal = '';
+      S.sLoginErr = false;
+      render();
+      setTimeout(function(){ var f=g('sLoginInput'); if(f) f.focus(); }, 60);
+    }
+  };
   var csb=g('closeSettingsBtn'); if(csb) csb.onclick=function(){ S.showSettings=false; render(); };
+
+  /* ── Settings login overlay handlers ── */
+  var sli=g('sLoginInput');
+  if(sli){
+    sli.oninput=function(){ S.sLoginVal=this.value; S.sLoginErr=false; };
+    sli.onkeydown=function(e){ if(e.key==='Enter'){ doSettingsLogin(); } };
+  }
+  var slb=g('sLoginBtn'); if(slb) slb.onclick=doSettingsLogin;
+  var slc=g('sLoginCancel'); if(slc) slc.onclick=function(){
+    S.showSettingsLogin=false; S.sLoginVal=''; S.sLoginErr=false; render();
+  };
+  var slo=g('settings-login'); if(slo) slo.onclick=function(e){
+    if(e.target===slo){ S.showSettingsLogin=false; S.sLoginVal=''; S.sLoginErr=false; render(); }
+  };
   document.querySelectorAll('[data-settheme]').forEach(function(b){
     b.onclick=function(){
       S.theme=this.getAttribute('data-settheme');
@@ -2503,6 +4175,165 @@ function bindEvents() {
   });
   var sov=g('settings-overlay'); if(sov) sov.onclick=function(e){ if(e.target===sov){ S.showSettings=false; render(); } };
 
+  /* ── Settings Tab switching ── */
+  document.querySelectorAll('[data-stab]').forEach(function(b){
+    b.onclick=function(){
+      S.settingsTab = this.getAttribute('data-stab');
+      render();
+    };
+  });
+
+  /* ── Alert Preferences ── */
+  var pst=g('prefSoundToggle');
+  if(pst) pst.onclick=function(){
+    S.alertPrefs.soundEnabled = !S.alertPrefs.soundEnabled;
+    saveAlertPrefs();
+    if (S.alertPrefs.soundEnabled) playAlertChime();
+    render();
+  };
+  var pdt=g('prefDesktopToggle');
+  if(pdt) pdt.onclick=function(){
+    if (!S.alertPrefs.desktopNotif) {
+      // Turning ON — request permission first
+      if ('Notification' in window) {
+        if (Notification.permission === 'granted') {
+          S.alertPrefs.desktopNotif = true;
+          saveAlertPrefs();
+          showToast('🔔 Desktop notifications enabled.');
+          render();
+        } else if (Notification.permission === 'denied') {
+          showToast('🔕 Permission was denied. Enable it in your browser site settings.');
+        } else {
+          Notification.requestPermission().then(function(p){
+            if (p === 'granted') {
+              S.alertPrefs.desktopNotif = true;
+              saveAlertPrefs();
+              showToast('🔔 Desktop notifications enabled.');
+            } else {
+              showToast('🔕 Permission denied.');
+            }
+            render();
+          });
+        }
+      } else {
+        showToast('⚠ Browser does not support notifications.');
+      }
+    } else {
+      S.alertPrefs.desktopNotif = false;
+      saveAlertPrefs();
+      render();
+    }
+  };
+  var pct=g('prefCritThr');
+  if(pct) pct.onchange=function(){
+    var v = Math.max(10, Math.min(100, parseInt(this.value,10)||50));
+    S.alertPrefs.criticalThreshold = v/100;
+    saveAlertPrefs();
+    showToast('✓ Critical threshold set to '+v+'% of minimum.');
+    render();
+  };
+  var psn=g('prefSnooze');
+  if(psn) psn.onchange=function(){
+    var v = Math.max(5, Math.min(1440, parseInt(this.value,10)||60));
+    S.alertPrefs.snoozeMinutes = v;
+    saveAlertPrefs();
+    showToast('✓ Snooze set to '+v+' minutes.');
+  };
+  var pts=g('prefTestSound');
+  if(pts) pts.onclick=function(){
+    if (!S.alertPrefs.soundEnabled) {
+      showToast('🔇 Turn on the Sound chime toggle first.');
+      return;
+    }
+    playAlertChime();
+    showToast('🔊 Test chime played.');
+  };
+  var ptd=g('prefTestDesktop');
+  if(ptd) ptd.onclick=function(){
+    if (!('Notification' in window)) { showToast('⚠ Browser unsupported.'); return; }
+    if (Notification.permission !== 'granted') {
+      showToast('🔕 Enable desktop notifications first.');
+      return;
+    }
+    try {
+      new Notification('Windmill Stock Alert', {
+        body: '✓ Test notification — your alert system is working.',
+        icon: '', tag: 'windmill-test'
+      });
+      showToast('🖥 Test notification sent.');
+    } catch(e) { showToast('⚠ Could not show notification.'); }
+  };
+  var prs=g('prefRescan');
+  if(prs) prs.onclick=function(){
+    // Clear de-dup tracker so all current LOW/OUT items re-alert
+    _alertedItems = {};
+    try { localStorage.removeItem('windmill_alerted_items'); } catch(e){}
+    scanAndSendAlerts();
+    if (S.alertPrefs && S.alertPrefs.soundEnabled) {
+      var anyAlert = S.items.some(function(i){ return getStatus(i.balance, i.threshold) !== 'OK'; });
+      if (anyAlert) playAlertChime();
+    }
+    showToast('🔄 Rescan complete. Roastery notified.');
+  };
+  var rap=g('resetAlertPrefs');
+  if(rap) rap.onclick=function(){
+    showConfirm('Reset Alert Preferences', 'This will reset all alert settings to defaults: sound off, desktop off, 60 min snooze, 50% critical threshold. Continue?', function(){
+      S.alertPrefs = { soundEnabled:false, desktopNotif:false, snoozeMinutes:60, criticalThreshold:0.5 };
+      saveAlertPrefs();
+      showToast('✓ Alert preferences reset.');
+      render();
+    });
+  };
+
+  /* ── Movements CSV download buttons (in Settings → Data tab) ── */
+  ['csvDay:today','csvWeek:week','csvMonth:month','csvAll:all'].forEach(function(pair){
+    var parts = pair.split(':');
+    var btn = g(parts[0]);
+    if (btn) btn.onclick=function(){
+      // Temporarily switch period for the export, but don't change UI tabs
+      var prev = S.movPeriod;
+      S.movPeriod = parts[1];
+      exportMovementsCSV(parts[1]);
+      S.movPeriod = prev;
+    };
+  });
+
+  /* ── Recent Movements panel: tabs / search / filter / CSV ── */
+  document.querySelectorAll('[data-movperiod]').forEach(function(b){
+    b.onclick=function(){
+      S.movPeriod = this.getAttribute('data-movperiod');
+      render();
+    };
+  });
+  var msi=g('movSearchInp');
+  if(msi){
+    msi.oninput=function(){
+      var pos=this.selectionStart;
+      S.movSearch=this.value;
+      // Debounce render via timeout to keep typing smooth
+      if (window._movSearchT) clearTimeout(window._movSearchT);
+      window._movSearchT = setTimeout(function(){
+        render();
+        var f=g('movSearchInp');
+        if (f) { f.focus(); try{ f.setSelectionRange(pos,pos); }catch(e){} }
+      }, 220);
+    };
+  }
+  var mtf=g('movTypeFilterSel');
+  if(mtf) mtf.onchange=function(){ S.movTypeFilter=this.value; render(); };
+  var mcb=g('movCsvBtn');
+  if(mcb) mcb.onclick=function(){ exportMovementsCSV(S.movPeriod); };
+
+  /* Change Password button inside Settings — closes settings & opens cpwd modal */
+  var scpb=g('settingsCPwdBtn');
+  if(scpb) scpb.onclick=function(){
+    S.showSettings=false;
+    S.showCPwd=true;
+    S.cpOld=S.cpNew=S.cpConf=S.cpErr='';
+    render();
+    setTimeout(function(){ var f=g('cpOld'); if(f) f.focus(); }, 60);
+  };
+
   var cpb=g('copyProvBtn'); if(cpb) cpb.onclick=function(){
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
     var lines = ['Windmill Cafe & Roastery — Purchase Order', new Date().toLocaleDateString(), ''];
@@ -2513,6 +4344,83 @@ function bindEvents() {
     });
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Order list copied to clipboard!'); });
   };
+
+  /* ══ SNAPSHOTS ══════════════════════════════════════════════ */
+  var tsn=g('toggleSnaps');     if(tsn) tsn.onclick=function(){ S.showSnapshotsPanel=!S.showSnapshotsPanel; render(); };
+  var csn=g('closeSnapsBtn');   if(csn) csn.onclick=function(){ S.showSnapshotsPanel=false; render(); };
+  var tkb=g('takeSnapBtn');     if(tkb) tkb.onclick=function(){ takeSnapshot('manual'); };
+
+  /* ══ ACTIVITY FILTER ════════════════════════════════════════ */
+  var aft=g('actfToggle');      if(aft) aft.onclick=function(){ S.showActFilter=!S.showActFilter; render(); };
+  var afr=g('actfReset');       if(afr) afr.onclick=function(){ resetActFilter(); render(); };
+  var afri=g('actfResetInline');if(afri)afri.onclick=function(){ resetActFilter(); render(); };
+  document.querySelectorAll('[data-actftype]').forEach(function(b){
+    b.onclick=function(){ S.actFilter.type=this.getAttribute('data-actftype'); S.histPage=1; render(); };
+  });
+  document.querySelectorAll('[data-actfrange]').forEach(function(b){
+    b.onclick=function(){ S.actFilter.range=this.getAttribute('data-actfrange'); S.histPage=1; render(); };
+  });
+  var afi=g('actfItem');        if(afi) afi.onchange=function(){ S.actFilter.item=this.value; S.histPage=1; render(); };
+  var afs=g('actfSearch');
+  if(afs) afs.oninput=function(){
+    S.actFilter.search=this.value; S.histPage=1;
+    clearTimeout(window._afsT);
+    var inp=this;
+    window._afsT=setTimeout(function(){
+      var pos=inp.selectionStart;
+      render();
+      var f=document.getElementById('actfSearch');
+      if(f){ f.focus(); try{ f.setSelectionRange(pos,pos); }catch(e){} }
+    }, 250);
+  };
+
+  /* ══ TEAM UPDATES ═══════════════════════════════════════════ */
+  var tua=g('tuAuthor');
+  if(tua) tua.oninput=function(){ S.newUpdAuthor=this.value; };
+  var tut=g('tuText');
+  if(tut) {
+    tut.oninput=function(){
+      S.newUpdText=this.value;
+      var btn=g('tuPostBtn');
+      if(btn) {
+        if(this.value.trim()) btn.removeAttribute('disabled');
+        else btn.setAttribute('disabled','');
+      }
+    };
+    tut.onkeydown=function(ev){
+      if(ev.key==='Enter' && (ev.ctrlKey || ev.metaKey)) {
+        ev.preventDefault();
+        if(S.newUpdText.trim()) postTeamUpdate(S.newUpdText, S.newUpdAuthor || S.commentUser);
+      }
+    };
+  }
+  var tup=g('tuPostBtn');
+  if(tup) tup.onclick=function(){
+    if(S.newUpdText.trim()) postTeamUpdate(S.newUpdText, S.newUpdAuthor || S.commentUser);
+  };
+  var tut2=g('tuToggleAll');
+  if(tut2) tut2.onclick=function(){ S.showTeamUpdatesAll=!S.showTeamUpdatesAll; render(); };
+  document.querySelectorAll('[data-tudel]').forEach(function(b){
+    b.onclick=function(){
+      var id=this.getAttribute('data-tudel');
+      showConfirm('Delete update?', 'Remove this team update permanently? This cannot be undone.', function(){
+        deleteTeamUpdate(id);
+      });
+    };
+  });
+
+  /* ══ DATA PORTABILITY ═══════════════════════════════════════ */
+  var dpe=g('dpExportBtn');     if(dpe) dpe.onclick=exportFullBackup;
+  var dpi=g('dpImportBtn');
+  var dpf=g('dpImportFile');
+  if(dpi && dpf) {
+    dpi.onclick=function(){ dpf.click(); };
+    dpf.onchange=function(ev){
+      var f=ev.target.files && ev.target.files[0];
+      if(f) importFullBackup(f);
+      ev.target.value=''; // allow re-selecting same file
+    };
+  }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -2537,6 +4445,7 @@ function bootApp() {
   S.syncing = true;
   applyTheme(); // restore saved theme on load
   _loadAlertedItems(); // restore de-dup tracker from localStorage
+  loadAlertPrefs();    // restore alert sound/desktop/snooze preferences
 
   fbRef.once('value', function(snap) {
     var data = snap.val() || {};
@@ -2545,9 +4454,11 @@ function bootApp() {
       fbRef.set({ items: DEFAULTS, password: 'windmill2024' });
       S.items = DEFAULTS; S.history = []; S.password = 'windmill2024';
     } else {
-      S.items    = data.items   ? objToArr(data.items)   : DEFAULTS;
-      S.history  = data.history ? objToArr(data.history) : [];
-      S.password = data.password || 'windmill2024';
+      S.items       = data.items       ? objToArr(data.items)   : DEFAULTS;
+      S.history     = data.history     ? objToArr(data.history) : [];
+      S.password    = data.password    || 'windmill2024';
+      S.snapshots   = data.snapshots   || {};
+      S.teamUpdates = data.teamUpdates || {};
     }
     S.syncing = false;
     S.lastSync = new Date();
@@ -2556,6 +4467,19 @@ function bootApp() {
 
     // Scan all items on first load — send alerts for anything already LOW or OUT
     setTimeout(scanAndSendAlerts, 1500);
+    // Auto-snapshot: capture today's state if we don't have one yet
+    setTimeout(autoSnapshotCheck, 2000);
+
+    // Auto-show alerts popup ONCE per session if any item is below threshold
+    setTimeout(function(){
+      if (S._alertsPopupAutoShown) return;
+      var anyAlert = S.items.some(function(i){ return getStatus(i.balance, i.threshold) !== 'OK'; });
+      if (anyAlert) {
+        S._alertsPopupAutoShown = true;
+        S.showAlertsPopup = true;
+        render();
+      }
+    }, 1800);
 
     /* Set up real-time listener.
        _ignoreRemote = true for 1 second to block the immediate
