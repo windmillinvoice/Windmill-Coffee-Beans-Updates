@@ -1092,17 +1092,27 @@ function showConfirm(title, msg, onOk) {
   S.confirmModal = { title: title, msg: msg, onOk: onOk };
   render();
 }
-function getStatus(bal, thr) { return bal === 0 ? 'OUT' : bal < thr ? 'LOW' : 'OK'; }
+function getStatus(bal, thr) {
+  var b = Number(bal) || 0;
+  var t = Number(thr) || 0;
+  /* b <= 0 catches null/undefined/negative balances as OUT */
+  return b <= 0 ? 'OUT' : b < t ? 'LOW' : 'OK';
+}
 
 /* Severity tier — classifies how serious a low-stock event is.
    CRITICAL: balance is 0 (OUT) OR below criticalThreshold * min
    WARNING:  balance < min but above critical band
    OK:       at or above min                                       */
 function getSeverity(bal, thr) {
-  if (bal === 0) return 'CRITICAL';
-  var critBand = thr * (S.alertPrefs && S.alertPrefs.criticalThreshold || 0.5);
-  if (bal <= critBand) return 'CRITICAL';
-  if (bal < thr) return 'WARNING';
+  var b = Number(bal) || 0;
+  var t = Number(thr) || 0;
+  if (b <= 0) return 'CRITICAL';
+  /* Use explicit number check so an explicit 0 setting doesn't fall back to 0.5 */
+  var ct = (S.alertPrefs && typeof S.alertPrefs.criticalThreshold === 'number')
+    ? S.alertPrefs.criticalThreshold : 0.5;
+  var critBand = t * ct;
+  if (b <= critBand) return 'CRITICAL';
+  if (b < t) return 'WARNING';
   return 'OK';
 }
 
@@ -1133,6 +1143,23 @@ var SM = {
   OUT: {lbl:'OUT',      cls:'badge-out', color:'var(--red)',    bar:'var(--red)'}
 };
 function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+/* Round any number to max 2 decimal places, strip trailing zeros */
+function r2(n) { return Math.round((Number(n)||0) * 100) / 100; }
+/* Generate a collision-free ID: ms timestamp + random suffix.
+   Date.now() alone can collide if two calls happen in the same millisecond
+   (rapid logging, ERP auto-accept, multi-device). Firebase keys things by id,
+   so a collision silently overwrites the prior entry. */
+function uniqueId() {
+  return Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+}
+/* Direction of a movement entry for display purposes.
+   Returns 'IN' (stock went up) or 'OUT' (stock went down). ADJ is signed:
+   positive → IN-like, negative → OUT-like. */
+function movDir(e) {
+  if (e.type === 'IN') return 'IN';
+  if (e.type === 'ADJ') return (Number(e.qty)||0) >= 0 ? 'IN' : 'OUT';
+  return 'OUT'; /* OUT, WASTE */
+}
 function todayStr() { return new Date().toDateString(); }
 function fmtTime(d) { return d ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'; }
 function fmtDate(d) { return d ? d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'; }
@@ -1191,11 +1218,16 @@ function filteredMovements() {
   return S.history.filter(function(e){
     var ts = new Date(e.ts).getTime();
     if (cutoff && ts < cutoff) return false;
-    if (typeF !== 'All' && e.type !== typeF) {
-      // 'OUT' filter should also include WASTE/ADJ-out
-      if (typeF === 'OUT' && (e.type==='WASTE')) { /* keep */ }
-      else if (typeF === 'IN' && e.type === 'IN') { /* keep */ }
-      else return false;
+    if (typeF !== 'All') {
+      /* OUT bucket includes WASTE and negative ADJ; IN bucket includes positive ADJ */
+      var q = Number(e.qty)||0;
+      if (typeF === 'OUT') {
+        if (!(e.type === 'OUT' || e.type === 'WASTE' || (e.type === 'ADJ' && q < 0))) return false;
+      } else if (typeF === 'IN') {
+        if (!(e.type === 'IN' || (e.type === 'ADJ' && q > 0))) return false;
+      } else if (e.type !== typeF) {
+        return false;
+      }
     }
     if (search) {
       var hay = (e.itemName||'') + ' ' + (e.note||'') + ' ' + (e.type||'');
@@ -1215,7 +1247,13 @@ function groupByDay(movs) {
     groups[key].items.push(e);
     var q = Number(e.qty)||0;
     if (e.type === 'IN') groups[key].totalIn += q;
-    else groups[key].totalOut += q;
+    else if (e.type === 'ADJ') {
+      /* ADJ is signed: positive = stock went up (counts as IN-like),
+         negative = stock went down (counts as OUT-like) */
+      if (q >= 0) groups[key].totalIn += q;
+      else groups[key].totalOut += Math.abs(q);
+    }
+    else groups[key].totalOut += q; /* OUT, WASTE always reduce stock */
   });
   // Return sorted desc by date
   return Object.values(groups).sort(function(a,b){ return b.date.getTime() - a.date.getTime(); });
@@ -1285,14 +1323,22 @@ function fireDesktopNotif(title, body) {
   } catch(e) {}
 }
 function todayMoves(itemId, type) {
-  var tod = todayStr();
+  var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  var todayMs = todayStart.getTime();
   return S.history.filter(function(e) {
-    /* Use == not === and Number() to handle Firebase string/number coercion */
     var itemMatch = !itemId || Number(e.itemId) === Number(itemId);
-    var typeMatch = !type || e.type === type;
-    var dateMatch = new Date(e.ts).toDateString() === tod;
-    return dateMatch && itemMatch && typeMatch;
-  }).reduce(function(s, e) { return s + Number(e.qty); }, 0);
+    var dateMatch = new Date(e.ts).getTime() >= todayMs;
+    if (!itemMatch || !dateMatch) return false;
+    if (!type) return true;
+    /* ADJ is signed: positive ADJ counts as IN, negative ADJ counts as OUT */
+    var q = Number(e.qty) || 0;
+    if (type === 'IN') return e.type === 'IN' || (e.type === 'ADJ' && q > 0);
+    if (type === 'OUT') return e.type === 'OUT' || e.type === 'WASTE' || (e.type === 'ADJ' && q < 0);
+    return e.type === type;
+  }).reduce(function(s, e) {
+    /* Always sum the absolute value — caller wants the magnitude in this bucket */
+    return s + Math.abs(Number(e.qty) || 0);
+  }, 0);
 }
 function showToast(msg, dur) {
   if(S.toastTimer) clearTimeout(S.toastTimer);
@@ -1342,8 +1388,12 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   });
   var runningBal = currentBal;
   afterEntries.forEach(function(e){
+    /* Reverse-walk: undo each entry's effect on the balance.
+       IN added → subtract. OUT/WASTE subtracted → add back.
+       ADJ is signed (positive = increase) → subtract to reverse. */
     if(e.type==='IN') runningBal -= Number(e.qty);
-    else runningBal += Number(e.qty);
+    else if(e.type==='ADJ') runningBal -= Number(e.qty);
+    else runningBal += Number(e.qty); /* OUT, WASTE */
   });
   // Also subtract entries within range that happened after first day
   var firstDayStr = days[0];
@@ -1351,17 +1401,18 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   // Build rows with carry-forward
   var rows = [];
   var open = runningBal;
-  // Walk from first day back: subtract this day's net to get opening
-  // Actually: compute open of first day = runningBal minus all in-range-days net
+  // Compute open of first day = runningBal minus net effect of in-range days
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
+  /* ADJ now signed: positive ADJ adds to balance, so subtract to reverse */
+  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
 
   open = periodOpenBal;
   days.forEach(function(dk){
     var r = dayMap[dk];
-    var close = open + r.in - r.out - r.waste - r.adj;
-    rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
+    /* ADJ is signed — add it directly. r2() prevents float drift over long periods. */
+    var close = r2(open + r.in - r.out - r.waste + r.adj);
+    rows.push({ date:dk, open:r2(open), in:r2(r.in), out:r2(r.out), waste:r2(r.waste), adj:r2(r.adj), close:close });
     open = close;
   });
   return rows;
@@ -1377,11 +1428,9 @@ function avgDailyUsage(itemId) {
   });
   if(!entries.length) return 0;
   var totalOut = entries.reduce(function(s,e){ return s + Number(e.qty); }, 0);
-  // count distinct days with activity
-  var days = {};
-  entries.forEach(function(e){ days[new Date(e.ts).toDateString()] = 1; });
-  var activeDays = Object.keys(days).length;
-  return activeDays ? Math.round((totalOut / activeDays) * 10) / 10 : 0;
+  /* Divide by full 30-day window so infrequently-used items don't get
+     inflated averages (dividing by only active days caused 10x-high suggestions) */
+  return Math.round((totalOut / 30) * 10) / 10;
 }
 
 function defaultDateRange() {
@@ -1393,11 +1442,16 @@ function defaultDateRange() {
 
 /* Category-wise ledger: aggregates multiple items */
 function buildCategoryLedger(itemIds, fromDate, toDate) {
+  /* Normalize once with a Set of numbers so string-vs-number id mismatches
+     from Firebase don't cause entries to slip through inconsistently. */
+  var idSet = {};
+  (itemIds||[]).forEach(function(id){ idSet[String(Number(id))] = 1; });
+  function isMatch(eid){ return idSet[String(Number(eid))] === 1; }
+
   // Build combined daily ledger across multiple item IDs
   var entries = S.history.filter(function(e){
     var d = new Date(e.ts);
-    var match = itemIds.indexOf(Number(e.itemId)) >= 0 || itemIds.indexOf(String(e.itemId)) >= 0;
-    return match && d >= fromDate && d <= toDate;
+    return isMatch(e.itemId) && d >= fromDate && d <= toDate;
   }).slice().sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
 
   if(!entries.length) return [];
@@ -1412,22 +1466,29 @@ function buildCategoryLedger(itemIds, fromDate, toDate) {
     else if(e.type==='ADJ') dayMap[key].adj += Number(e.qty);
   });
   var days = Object.keys(dayMap).sort();
-  var catBalance = S.items.filter(function(i){ return itemIds.indexOf(i.id)>=0||itemIds.indexOf(Number(i.id))>=0; })
-    .reduce(function(s,i){ return s+i.balance; },0);
+  var catBalance = S.items.filter(function(i){ return isMatch(i.id); })
+    .reduce(function(s,i){ return s+Number(i.balance); },0);
   var afterEntries = S.history.filter(function(e){
     var d = new Date(e.ts);
-    return (itemIds.indexOf(Number(e.itemId))>=0) && d > toDate;
+    return isMatch(e.itemId) && d > toDate;
   });
   var runningBal = catBalance;
-  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
+  afterEntries.forEach(function(e){
+    /* Reverse-walk: undo each entry. ADJ is signed → subtract to reverse. */
+    if(e.type==='IN') runningBal -= Number(e.qty);
+    else if(e.type==='ADJ') runningBal -= Number(e.qty);
+    else runningBal += Number(e.qty); /* OUT, WASTE */
+  });
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
+  /* ADJ now signed: subtract to reverse */
+  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
   var rows = [];
   days.forEach(function(dk){
     var r = dayMap[dk];
-    var close = open + r.in - r.out - r.waste - r.adj;
-    rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
+    /* ADJ signed — add directly. r2() prevents drift over long periods. */
+    var close = r2(open + r.in - r.out - r.waste + r.adj);
+    rows.push({ date:dk, open:r2(open), in:r2(r.in), out:r2(r.out), waste:r2(r.waste), adj:r2(r.adj), close:close });
     open = close;
   });
   return rows;
@@ -1456,9 +1517,9 @@ function buildSnapshot(by) {
   return {
     ts: new Date().toISOString(),
     by: by || 'auto',
-    totals: { totalKg: Math.round(totalKg*10)/10, lowCount: lowCount, outCount: outCount, itemCount: S.items.length },
+    totals: { totalKg: r2(totalKg), lowCount: lowCount, outCount: outCount, itemCount: S.items.length },
     items: S.items.map(function(i){
-      return { id:i.id, name:i.name, balance:Number(i.balance), unit:i.unit||'kg', threshold:Number(i.threshold), status:getStatus(i.balance,i.threshold) };
+      return { id:i.id, name:i.name, balance:r2(i.balance), unit:i.unit||'kg', threshold:Number(i.threshold), status:getStatus(i.balance,i.threshold) };
     })
   };
 }
@@ -1496,7 +1557,7 @@ function snapshotDelta(curKey, prevKey) {
   if(!cur) return null;
   if(!prev) return { totalKg: 0, lowCount: 0, outCount: 0, isFirst: true };
   return {
-    totalKg: Math.round((cur.totals.totalKg - prev.totals.totalKg)*10)/10,
+    totalKg: r2((cur.totals.totalKg - prev.totals.totalKg)),
     lowCount: cur.totals.lowCount - prev.totals.lowCount,
     outCount: cur.totals.outCount - prev.totals.outCount,
     isFirst: false
@@ -1523,7 +1584,7 @@ function usageTopMovers(days, limit) {
   });
   var arr = Object.keys(totals).map(function(k){
     var item = S.items.find(function(i){ return String(i.id)===k; });
-    return { id:k, name: item?item.name:'(deleted item)', qty: Math.round(totals[k]*10)/10, unit: item?item.unit:'kg' };
+    return { id:k, name: item?item.name:'(deleted item)', qty: r2(totals[k]), unit: item?item.unit:'kg' };
   }).sort(function(a,b){ return b.qty - a.qty; });
   return arr.slice(0, limit||3);
 }
@@ -1602,14 +1663,14 @@ function usageByOrigin() {
     return {
       origin: g.origin,
       itemCount: g.items.length,
-      balance:  Math.round(g.balance*10)/10,
+      balance:  r2(g.balance),
       lowCount: g.lowCount,
       outCount: g.outCount,
-      outToday: Math.round(g.outToday*10)/10,
-      out7:     Math.round(g.out7*10)/10,
-      out30:    Math.round(g.out30*10)/10,
+      outToday: r2(g.outToday),
+      out7:     r2(g.out7),
+      out30:    r2(g.out30),
       topItemName: topItem ? topItem.name : null,
-      topItemQty:  Math.round(topQty*10)/10,
+      topItemQty:  r2(topQty),
       unit: g.items[0] ? g.items[0].unit : 'kg'
     };
   }).sort(function(a,b){
@@ -1657,7 +1718,7 @@ function resetActFilter() {
 function postTeamUpdate(text, author) {
   text = String(text||'').trim();
   if(!text) return;
-  var id = Date.now();
+  var id = uniqueId();
   var entry = {
     id: id,
     ts: new Date().toISOString(),
@@ -1854,20 +1915,20 @@ function scanAndSendAlerts() {
       sendStockAlert({
         type: 'auto_out', status: 'OUT',
         itemId: item.id, itemName: item.name,
-        balance: item.balance, threshold: item.threshold, unit: item.unit,
+        balance: r2(item.balance), threshold: item.threshold, unit: item.unit,
         message: '🚨 OUT OF STOCK: ' + item.name +
                  ' has reached 0 ' + item.unit + '. Please roast more urgently.'
       });
-      newAlerts.push({ status:'OUT', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
+      newAlerts.push({ status:'OUT', name:item.name, balance:r2(item.balance), unit:item.unit, threshold:item.threshold });
     } else {
       sendStockAlert({
         type: 'auto_low', status: 'LOW',
         itemId: item.id, itemName: item.name,
-        balance: item.balance, threshold: item.threshold, unit: item.unit,
-        message: '⚠️ LOW STOCK: ' + item.name + ' is at ' + item.balance +
+        balance: r2(item.balance), threshold: item.threshold, unit: item.unit,
+        message: '⚠️ LOW STOCK: ' + item.name + ' is at ' + r2(item.balance) +
                  ' ' + item.unit + ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
       });
-      newAlerts.push({ status:'LOW', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
+      newAlerts.push({ status:'LOW', name:item.name, balance:r2(item.balance), unit:item.unit, threshold:item.threshold });
     }
     _saveAlertedItem(item.id, status);
   });
@@ -2028,7 +2089,7 @@ function acceptIncoming(reqKey) {
 
   var item = S.items.find(function(i){ return i.id === targetItemId; });
   if(!item){ showToast('⚠️ Selected item not found.'); return; }
-  var weight = Number(req.weight) || 0;
+  var weight = r2(Number(req.weight) || 0);
   if(weight <= 0){ showToast('⚠️ Invalid weight in transfer request.'); return; }
 
   // Log as IN movement
@@ -2116,16 +2177,40 @@ function doSettingsLogin() {
 
 function logMovement(itemId, type, qty, note) {
   var item = S.items.find(function(i){ return i.id === itemId; });
-  if(!item) return;
+  if(!item) { showToast('⚠️ Item no longer exists.'); return; }
 
-  var prevBal = item.balance; // capture BEFORE the change
+  var prevBal = r2(item.balance); // capture BEFORE the change
+  qty = r2(qty);
 
-  // IN = add; OUT / WASTE / ADJ = subtract (floor at 0)
-  var newBal = type === 'IN' ? item.balance + qty : Math.max(0, item.balance - qty);
+  if (!isFinite(qty)) { showToast('⚠️ Invalid quantity.'); return; }
+
+  // Compute new balance based on movement type
+  var newBal;
+  if (type === 'IN')         newBal = r2(prevBal + qty);
+  else if (type === 'OUT')   newBal = r2(prevBal - qty);
+  else if (type === 'WASTE') newBal = r2(prevBal - qty);
+  else if (type === 'ADJ')   newBal = r2(prevBal + qty); /* qty is signed for ADJ */
+  else { showToast('⚠️ Unknown movement type: '+type); return; }
+
+  // Safety check 1: guard against negative balance (over-withdrawal).
+  if (newBal < 0) {
+    showToast('⚠️ Cannot save: would make balance negative ('+newBal+' '+item.unit+').');
+    return;
+  }
+
+  // Safety check 2: re-read live state at apply time to detect any concurrent
+  // mutation (Firebase remote update arrived between read and write).
+  var liveItem = S.items.find(function(i){ return i.id === itemId; });
+  if (!liveItem) { showToast('⚠️ Item disappeared during save.'); return; }
+  if (r2(liveItem.balance) !== prevBal) {
+    showToast('⚠️ Stock changed elsewhere during your edit. Please retry.');
+    render();
+    return;
+  }
 
   S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:newBal}) : i; });
   S.history = [{
-    id: Date.now(), ts: new Date().toISOString(),
+    id: uniqueId(), ts: new Date().toISOString(),
     itemId: itemId, itemName: item.name,
     type: type, qty: qty, note: note||''
   }].concat(S.history).slice(0, 500);
@@ -2135,31 +2220,33 @@ function logMovement(itemId, type, qty, note) {
   // ── FEATURE 1: AUTOMATED STOCK ALERT ──────────────────────────────
   // Fires only when stock first crosses below threshold or first hits zero.
   // Does NOT fire repeatedly for every OUT while already low.
-  if (type !== 'IN' && alertsRef) {
-    var wasAboveThreshold = prevBal >= item.threshold;
-    var wasAboveZero      = prevBal > 0;
-    var isNowOut          = newBal === 0;
-    var isNowLow          = newBal > 0 && newBal < item.threshold;
+  if (alertsRef) {
+    if (type !== 'IN') {
+      var wasAboveThreshold = prevBal >= item.threshold;
+      var wasAboveZero      = prevBal > 0;
+      var isNowOut          = newBal <= 0;
+      var isNowLow          = newBal > 0 && newBal < item.threshold;
 
-    if (isNowOut && wasAboveZero) {
-      sendStockAlert({
-        type: 'auto_out', status: 'OUT',
-        itemId: itemId, itemName: item.name,
-        balance: newBal, threshold: item.threshold, unit: item.unit,
-        message: '🚨 OUT OF STOCK: ' + item.name +
-                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
-      });
-      _saveAlertedItem(itemId, 'OUT');
-    } else if (isNowLow && wasAboveThreshold) {
-      sendStockAlert({
-        type: 'auto_low', status: 'LOW',
-        itemId: itemId, itemName: item.name,
-        balance: newBal, threshold: item.threshold, unit: item.unit,
-        message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
-                 newBal + ' ' + item.unit +
-                 ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
-      });
-      _saveAlertedItem(itemId, 'LOW');
+      if (isNowOut && wasAboveZero) {
+        sendStockAlert({
+          type: 'auto_out', status: 'OUT',
+          itemId: itemId, itemName: item.name,
+          balance: newBal, threshold: item.threshold, unit: item.unit,
+          message: '🚨 OUT OF STOCK: ' + item.name +
+                   ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+        });
+        _saveAlertedItem(itemId, 'OUT');
+      } else if (isNowLow && wasAboveThreshold) {
+        sendStockAlert({
+          type: 'auto_low', status: 'LOW',
+          itemId: itemId, itemName: item.name,
+          balance: newBal, threshold: item.threshold, unit: item.unit,
+          message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
+                   newBal + ' ' + item.unit +
+                   ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
+        });
+        _saveAlertedItem(itemId, 'LOW');
+      }
     } else if (type === 'IN' && newBal >= item.threshold) {
       // Stock restored above threshold — clear dedup so next dip re-alerts
       delete _alertedItems[String(itemId)];
@@ -2173,16 +2260,58 @@ function logMovement(itemId, type, qty, note) {
   render();
 }
 function addItem(item) {
-  S.items = S.items.concat([Object.assign({},item,{id:Date.now()})]);
+  /* Sanitize inputs before persisting */
+  var name = String(item.name||'').trim();
+  if (!name) { showToast('⚠️ Item name is required.'); return; }
+  var bal = r2(Number(item.balance));
+  if (!isFinite(bal) || bal < 0) bal = 0;
+  var thr = r2(Number(item.threshold));
+  if (!isFinite(thr) || thr < 0) thr = 0;
+  /* Use Date.now() but ensure uniqueness vs existing items */
+  var newId = Date.now();
+  while (S.items.some(function(i){ return Number(i.id) === newId; })) newId++;
+  var clean = {
+    id: newId,
+    name: name,
+    category: String(item.category||'Other').trim() || 'Other',
+    origin: String(item.origin||'').trim(),
+    unit: String(item.unit||'kg').trim() || 'kg',
+    balance: bal,
+    threshold: thr
+  };
+  S.items = S.items.concat([clean]);
   S.newItem = null; S.showAddItem = false;
-  saveAll(); showToast('✅ '+item.name+' added.'); render();
+  saveAll(); showToast('✅ '+name+' added.'); render();
 }
 function deleteItem(id) {
   var item = S.items.find(function(i){ return i.id === id; });
-  if(!item) return;
-  showConfirm('Delete Item', 'Remove "'+item.name+'" from inventory? This cannot be undone.', function(){
+  if(!item) { showToast('⚠️ Item not found.'); return; }
+  /* Count history entries attached to this item so the user knows the impact */
+  var attachedCount = S.history.filter(function(e){
+    return Number(e.itemId) === Number(id);
+  }).length;
+  var bal = r2(item.balance);
+  var msg = 'Remove "'+item.name+'" from inventory?';
+  if (bal > 0) msg += '\n\n⚠ Current balance: '+bal+' '+item.unit+' will be lost.';
+  if (attachedCount > 0) msg += '\n\n📋 '+attachedCount+' movement record'+(attachedCount===1?'':'s')+' for this item will also be deleted.';
+  msg += '\n\nThis cannot be undone.';
+
+  showConfirm('Delete Item', msg, function(){
+    /* Re-verify the item still exists (concurrent modification) */
+    var liveItem = S.items.find(function(i){ return i.id === id; });
+    if (!liveItem) { showToast('⚠️ Item already removed.'); render(); return; }
+    /* Remove the item AND its history entries together to avoid orphans */
     S.items = S.items.filter(function(i){ return i.id !== id; });
-    saveAll(); showToast('🗑 '+item.name+' removed.'); render();
+    S.history = S.history.filter(function(e){ return Number(e.itemId) !== Number(id); });
+    /* Also clean up comments keyed to deleted history entries */
+    var deletedEntryIds = {};
+    S.history.forEach(function(e){ deletedEntryIds[String(e.id)] = 1; });
+    /* Note: we keep S.comments intact — orphan comment keys are harmless and
+       don't affect calculations. Garbage-collecting them would require iterating
+       all comments and is not worth the complexity. */
+    saveAll();
+    showToast('🗑 '+liveItem.name+' removed'+(attachedCount?' (with '+attachedCount+' history record'+(attachedCount===1?'':'s')+')':'')+'.');
+    render();
   });
 }
 function changePwd(np) {
@@ -2191,25 +2320,79 @@ function changePwd(np) {
 }
 
 function clearAllHistory() {
-  showConfirm('Clear All History', '⚠️ Delete ALL movement history? Stock balances will NOT change — only the history log is cleared. This cannot be undone.', function(){
-    S.history = [];
-    fbRef.child('history').remove();
-    showToast('🗑 All history cleared.'); render();
-  });
+  showConfirm(
+    'Clear All History',
+    '⚠️ This action is disabled to protect data integrity.\n\nDeleting all history would leave stock balances inconsistent with the audit trail. To start fresh:\n\n1. Export a backup first (Settings → Data)\n2. Delete individual entries — balances will auto-recalculate\n\nOr, contact your administrator to perform a full reset.',
+    function(){ /* no-op: user dismisses */ }
+  );
 }
 
 function deleteHistoryDay(day) {
-  var label = day === new Date().toDateString() ? 'today' : day === new Date(Date.now()-86400000).toDateString() ? 'yesterday' : day;
-  showConfirm('Delete Day\'s History', 'Delete all entries for '+label+'? Stock balances will NOT be changed.', function(){
-    S.history = S.history.filter(function(e){ return new Date(e.ts).toDateString() !== day; });
-    saveAll(); showToast('🗑 Deleted all entries for '+label+'.'); render();
-  });
+  showConfirm(
+    'Delete Day\'s History',
+    '⚠️ Bulk day-deletion is disabled to protect data integrity.\n\nDeleting many entries at once would leave balances inconsistent with the audit trail. Please delete entries individually — each delete will recalculate the balance to keep it consistent with the remaining history.',
+    function(){ /* no-op */ }
+  );
 }
 
 function deleteHistoryEntry(entryId) {
-  showConfirm('Delete Entry', 'Delete this entry from history? Stock balance will NOT change. Use ↩ Reverse if you also want to fix the balance.', function(){
+  var entry = S.history.find(function(e){ return String(e.id) === String(entryId); });
+  if(!entry) { showToast('⚠️ Entry not found.'); return; }
+  var item = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
+  var qty = Number(entry.qty)||0;
+  var displayQty = r2(Math.abs(qty));
+
+  /* Compute what the balance would become after removing this entry's effect.
+     IN added qty       → subtract qty (balance goes down)
+     OUT/WASTE subtracted qty → add qty (balance goes up)
+     ADJ added signed qty → subtract signed qty */
+  var newBal = null;
+  if (item) {
+    if (entry.type === 'IN')        newBal = r2(item.balance - qty);
+    else if (entry.type === 'ADJ')  newBal = r2(item.balance - qty);
+    else                            newBal = r2(item.balance + qty); /* OUT, WASTE */
+  }
+
+  var msg;
+  if (!item) {
+    msg = 'Item no longer exists. Delete this orphaned history entry?';
+  } else if (newBal < 0) {
+    msg = '⚠ Deleting this '+entry.type+' of '+displayQty+' '+item.unit+' would make the balance negative ('+newBal+' '+item.unit+'). Adjust the balance manually first, or use ↩ Reverse on more recent entries before deleting this one.';
+    showConfirm('Cannot Delete', msg, function(){});
+    return;
+  } else {
+    msg = 'Delete this '+entry.type+' of '+displayQty+' '+item.unit+' for "'+item.name+'"? Balance will be recalculated from '+r2(item.balance)+' to '+newBal+' '+item.unit+' to stay consistent with history.';
+  }
+
+  showConfirm('Delete Entry', msg, function(){
+    /* Re-read live state inside the confirm callback. The user confirmed
+       based on the values shown in the modal — if the live state differs
+       (Firebase pushed an update while the modal was open), abort. */
+    var liveItem = item ? S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); }) : null;
+    var liveEntry = S.history.find(function(e){ return String(e.id) === String(entryId); });
+    if (!liveEntry) { showToast('⚠️ Entry already deleted.'); render(); return; }
+
+    if (liveItem) {
+      if (r2(liveItem.balance) !== r2(item.balance)) {
+        showToast('⚠️ Stock changed during confirm — please retry.');
+        render();
+        return;
+      }
+      var liveNewBal;
+      if (entry.type === 'IN')        liveNewBal = r2(liveItem.balance - qty);
+      else if (entry.type === 'ADJ')  liveNewBal = r2(liveItem.balance - qty);
+      else                            liveNewBal = r2(liveItem.balance + qty);
+      if (liveNewBal < 0) {
+        showToast('⚠️ Cannot delete: would make balance negative.');
+        return;
+      }
+      S.items = S.items.map(function(i){ return i.id === liveItem.id ? Object.assign({},i,{balance:liveNewBal}) : i; });
+      newBal = liveNewBal; /* update for the toast message */
+    }
     S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
-    saveAll(); showToast('🗑 Entry deleted.'); render();
+    saveAll();
+    showToast(liveItem ? '🗑 Entry deleted, balance updated to '+newBal+' '+liveItem.unit : '🗑 Orphaned entry deleted.');
+    render();
   });
 }
 
@@ -2218,21 +2401,52 @@ function reverseEntry(entryId) {
   if(!entry) return;
   var item = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
   if(!item) { showToast('⚠️ Item no longer exists.'); return; }
-  showConfirm('Reverse Entry', 'Reverse '+entry.type+' of '+entry.qty+' '+item.unit+' for "'+item.name+'"? This will undo the balance change.', function(){
-    var newBal = entry.type === 'IN'
-      ? Math.max(0, item.balance - entry.qty)
-      : item.balance + entry.qty;
-    S.items = S.items.map(function(i){ return i.id === item.id ? Object.assign({},i,{balance:newBal}) : i; });
+  var qty = Number(entry.qty)||0;
+  var displayQty = r2(Math.abs(qty));
+  showConfirm('Reverse Entry', 'Reverse '+entry.type+' of '+displayQty+' '+item.unit+' for "'+item.name+'"? This will undo the balance change.', function(){
+    /* Re-read live state inside callback to catch concurrent mutations */
+    var liveItem = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
+    var liveEntry = S.history.find(function(e){ return String(e.id) === String(entryId); });
+    if (!liveItem) { showToast('⚠️ Item disappeared during confirm.'); render(); return; }
+    if (!liveEntry) { showToast('⚠️ Entry already removed.'); render(); return; }
+    if (r2(liveItem.balance) !== r2(item.balance)) {
+      showToast('⚠️ Stock changed during confirm — please retry.');
+      render();
+      return;
+    }
+    /* Reverse the original effect — must be mathematically exact.
+       No Math.max(0,...) clamp: if reversing produces a negative balance,
+       that's a real data problem the user needs to see, not silently hide. */
+    var newBal;
+    if (entry.type === 'IN') newBal = r2(liveItem.balance - qty);
+    else if (entry.type === 'ADJ') newBal = r2(liveItem.balance - qty);
+    else newBal = r2(liveItem.balance + qty); /* OUT, WASTE */
+
+    if (newBal < 0) {
+      showToast('⚠️ Cannot reverse: would make balance negative ('+newBal+' '+liveItem.unit+'). Adjust manually first.');
+      return;
+    }
+
+    S.items = S.items.map(function(i){ return i.id === liveItem.id ? Object.assign({},i,{balance:newBal}) : i; });
     S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
+    /* Build a new history entry that mirrors the reversal */
+    var revType, revQty;
+    if (entry.type === 'ADJ') {
+      revType = 'ADJ';
+      revQty = -qty; /* flip the sign */
+    } else {
+      revType = entry.type === 'IN' ? 'OUT' : 'IN';
+      revQty = displayQty;
+    }
     S.history = [{
-      id: Date.now(), ts: new Date().toISOString(),
-      itemId: item.id, itemName: item.name,
-      type: entry.type === 'IN' ? 'OUT' : 'IN',
-      qty: entry.qty,
+      id: uniqueId(), ts: new Date().toISOString(),
+      itemId: liveItem.id, itemName: liveItem.name,
+      type: revType,
+      qty: revQty,
       note: '↩ REVERSAL of '+entry.type+' entry'+(entry.note?' (was: '+entry.note+')':'')
     }].concat(S.history).slice(0,500);
     saveAll();
-    showToast('↩ Entry reversed for '+item.name);
+    showToast('↩ Entry reversed for '+liveItem.name);
     render();
   });
 }
@@ -2280,16 +2494,39 @@ function deleteCategory(name) {
    INLINE BALANCE EDIT
 ══════════════════════════════════════════════════════ */
 function saveEditedBalance(itemId, val) {
-  var n = parseFloat(val);
+  var n = r2(parseFloat(val));
   if(isNaN(n) || n < 0) { showToast('⚠️ Invalid value.'); return; }
   var item = S.items.find(function(i){ return i.id === itemId; });
   if(!item) return;
-  var old = item.balance;
+  var old = r2(item.balance);
+  var delta = r2(n - old);
+
+  // Safety check: re-read live state to detect concurrent mutation
+  // (e.g. Firebase pushed a remote update during the edit).
+  var liveItem = S.items.find(function(i){ return i.id === itemId; });
+  if (!liveItem) { showToast('⚠️ Item disappeared during save.'); return; }
+  if (r2(liveItem.balance) !== old) {
+    showToast('⚠️ Stock changed elsewhere during your edit. Please retry.');
+    S.editBalId = null; S.editBalVal = '';
+    render();
+    return;
+  }
+
+  // No-op edit: if delta rounds to 0, don't write a confusing 0-qty ADJ entry
+  if (delta === 0) {
+    S.editBalId = null; S.editBalVal = '';
+    showToast('No change.');
+    render();
+    return;
+  }
+
   S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:n}) : i; });
   S.history = [{
-    id: Date.now(), ts: new Date().toISOString(),
+    id: uniqueId(), ts: new Date().toISOString(),
     itemId: itemId, itemName: item.name,
-    type: 'ADJ', qty: Math.abs(n - old),
+    /* SIGNED delta — positive means stock went up, negative means it went down.
+       This lets reports correctly reconstruct the direction of manual edits. */
+    type: 'ADJ', qty: delta,
     note: '✏️ Manual balance edit: '+old+' → '+n
   }].concat(S.history).slice(0,500);
 
@@ -2334,7 +2571,7 @@ function exportCSV() {
   S.rptRows.forEach(function(r){
     var d = new Date(r.date+'T12:00:00');
     var dl = d.toLocaleDateString([],{day:'2-digit',month:'short',year:'numeric'});
-    lines.push([dl, r.open, r.in, r.out, r.waste, r.adj, r.close].join(','));
+    lines.push([dl, r2(r.open), r2(r.in), r2(r.out), r2(r.waste), r2(r.adj), r2(r.close)].join(','));
   });
   var csv = 'Windmill Cafe & Roastery \u2014 Stock Report\n'+title+'\n\n'+lines.join('\n');
   var blob = new Blob([csv], {type:'text/csv'});
@@ -2379,18 +2616,23 @@ function exportMovementsCSV(period) {
     // Day separator + summary
     var dStr = g.date.toLocaleDateString([], {weekday:'long', year:'numeric', month:'short', day:'numeric'});
     lines.push('');
-    lines.push(csvEscape('── ' + dStr + ' — IN: ' + (Math.round(g.totalIn*10)/10) + ' kg / OUT: ' + (Math.round(g.totalOut*10)/10) + ' kg ──'));
+    lines.push(csvEscape('── ' + dStr + ' — IN: ' + (r2(g.totalIn)) + ' kg / OUT: ' + (r2(g.totalOut)) + ' kg ──'));
     // Sort items oldest-first within the day
     var sorted = g.items.slice().sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
     sorted.forEach(function(e){
       var d = new Date(e.ts);
+      var qVal = r2(Number(e.qty)||0);
+      var qDisplay;
+      if (e.type === 'IN') qDisplay = '+' + Math.abs(qVal);
+      else if (e.type === 'ADJ') qDisplay = (qVal >= 0 ? '+' : '') + qVal; /* preserve sign */
+      else qDisplay = '-' + Math.abs(qVal); /* OUT, WASTE */
       lines.push([
         d.toLocaleDateString([], {year:'numeric', month:'2-digit', day:'2-digit'}),
         d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}),
         d.toLocaleDateString([], {weekday:'short'}),
         e.itemName || '',
         e.type || '',
-        (e.type === 'IN' ? '+' : '-') + (Number(e.qty)||0),
+        qDisplay,
         'kg',
         e.note || '',
         e.user || ''
@@ -2398,14 +2640,24 @@ function exportMovementsCSV(period) {
     });
   });
 
-  // Period totals
-  var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
-  var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+  // Period totals — handle signed ADJ correctly
+  var totalIn = movs.reduce(function(s,e){
+    var q = Number(e.qty)||0;
+    if (e.type === 'IN') return s + q;
+    if (e.type === 'ADJ' && q > 0) return s + q;
+    return s;
+  }, 0);
+  var totalOut = movs.reduce(function(s,e){
+    var q = Number(e.qty)||0;
+    if (e.type === 'OUT' || e.type === 'WASTE') return s + q;
+    if (e.type === 'ADJ' && q < 0) return s + Math.abs(q);
+    return s;
+  }, 0);
   lines.push('');
   lines.push(csvEscape('── PERIOD TOTALS ──'));
-  lines.push(['','','','Total IN','', '+'+(Math.round(totalIn*10)/10),'kg','',''].map(csvEscape).join(','));
-  lines.push(['','','','Total OUT','','-'+(Math.round(totalOut*10)/10),'kg','',''].map(csvEscape).join(','));
-  lines.push(['','','','Net Change','',(totalIn-totalOut>=0?'+':'')+(Math.round((totalIn-totalOut)*10)/10),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Total IN','', '+'+(r2(totalIn)),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Total OUT','','-'+(r2(totalOut)),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Net Change','',(totalIn-totalOut>=0?'+':'')+(r2((totalIn-totalOut))),'kg','',''].map(csvEscape).join(','));
 
   // Build & download — BOM so Excel opens UTF-8 correctly
   var csv = '\uFEFF' + lines.join('\n');
@@ -2455,7 +2707,7 @@ function renderIncoming(h) {
 
       if(confidence === 'exact') {
         /* Perfect match — show green confirmation */
-        var newBal = match.item.balance + Number(req.weight || 0);
+        var newBal = r2(match.item.balance + Number(req.weight || 0));
         h += '<div class="incoming-match-row">';
         h += '<span class="incoming-match-lbl">Matched Item</span>';
         h += '<span class="incoming-match-val">' + esc(match.item.name) + '</span>';
@@ -2482,7 +2734,7 @@ function renderIncoming(h) {
         h += '<option value="">— Choose inventory item —</option>';
         S.items.forEach(function(item) {
           var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
-          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
+          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + r2(item.balance) + ' ' + esc(item.unit) + ')</option>';
         });
         h += '</select>';
         h += '<span class="match-fuzzy">⚠ Review Required</span>';
@@ -2502,7 +2754,7 @@ function renderIncoming(h) {
         h += '<option value="">— Choose inventory item —</option>';
         S.items.forEach(function(item) {
           var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
-          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
+          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + r2(item.balance) + ' ' + esc(item.unit) + ')</option>';
         });
         h += '</select>';
         h += '<span class="match-none">✗ No Match Found</span>';
@@ -2650,7 +2902,7 @@ function render() {
       h += '<div id="overlay"><div class="modal">'
         +'<div class="modal-hdr"><div class="modal-icon">'+(S.logType==='IN'?'📥':'📤')+'</div>'
         +'<div><div class="modal-title">'+esc(lItem.name)+'</div>'
-        +'<div class="modal-sub">Current balance: '+lItem.balance+' '+esc(lItem.unit)+'</div></div></div>'
+        +'<div class="modal-sub">Current balance: '+r2(lItem.balance)+' '+esc(lItem.unit)+'</div></div></div>'
         +'<div class="modal-body">'
         +'<div class="modal-type-toggle">'
         +'<button class="type-opt'+(S.logType==='IN'?' sel-in':'')+'" id="typeIn">📥 IN</button>'
@@ -2747,7 +2999,7 @@ function render() {
   /* METRICS */
   var todIn   = todayMoves(null,'IN');
   var todOut  = todayMoves(null,'OUT');
-  var totBal  = S.items.reduce(function(s,i){ return s+i.balance; },0);
+  var totBal  = r2(S.items.reduce(function(s,i){ return s+i.balance; },0));
   h += '<div class="metrics">'
     +'<div class="metric"><div class="metric-val" style="color:var(--gold2)">'+totBal.toLocaleString()+'</div><div class="metric-lbl">Total Balance</div><div class="metric-sub">kg on hand</div></div>'
     +'<div class="metric"><div class="metric-val" style="color:var(--green)">+'+todIn.toLocaleString()+'</div><div class="metric-lbl">In Today</div><div class="metric-sub">kg received</div></div>'
@@ -2777,13 +3029,13 @@ function render() {
     var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
     var outCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
     var origCnt= Array.from(new Set(S.items.map(function(i){ return i.origin; }))).length;
-    var totBalDash = S.items.reduce(function(s,i){ return s+Number(i.balance); }, 0);
+    var totBalDash = r2(S.items.reduce(function(s,i){ return s+Number(i.balance); }, 0));
     var healthCls = outCnt>0 ? 'kpi-crit' : lowCnt>0 ? 'kpi-warn' : 'kpi-good';
     var healthLbl = outCnt>0 ? outCnt+' out · '+lowCnt+' low' : lowCnt>0 ? lowCnt+' low · all in stock' : 'All healthy';
     h += '<div class="kpi-row">'
       +'<div class="kpi-tile">'
       +'<div class="kpi-row-top"><span class="kpi-icon">☕</span><span class="kpi-lbl">Total Stock</span></div>'
-      +'<div class="kpi-val" style="color:var(--gold3)">'+Math.round(totBalDash).toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-val" style="color:var(--gold3)">'+totBalDash.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
       +'<div class="kpi-sub"><span class="kpi-pulse-dot"></span>'+S.items.length+' items live</div>'
       +'</div>'
       +'<div class="kpi-tile">'
@@ -2798,12 +3050,12 @@ function render() {
       +'</div>'
       +'<div class="kpi-tile">'
       +'<div class="kpi-row-top"><span class="kpi-icon">📥</span><span class="kpi-lbl">In Today</span></div>'
-      +'<div class="kpi-val" style="color:var(--green)">+'+todIn.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-val" style="color:var(--green)">+'+r2(todIn).toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
       +'<div class="kpi-sub">stock received</div>'
       +'</div>'
       +'<div class="kpi-tile">'
       +'<div class="kpi-row-top"><span class="kpi-icon">📤</span><span class="kpi-lbl">Out Today</span></div>'
-      +'<div class="kpi-val" style="color:'+(todOut?'var(--red)':'var(--cream3)')+'">'+(todOut?'−':'')+todOut.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-val" style="color:'+(todOut?'var(--red)':'var(--cream3)')+'">'+(todOut?'−':'')+r2(todOut).toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
       +'<div class="kpi-sub">stock used</div>'
       +'</div>'
       +'</div>';
@@ -2841,8 +3093,8 @@ function render() {
           +'<div class="card-top"><div><div class="card-name">'+esc(item.name)+'</div>'
           +'<div class="card-cat">'+esc(item.category)+' · '+esc(item.origin)+'</div></div>'
           +'<span class="badge '+m.cls+'">'+m.lbl+'</span></div>'
-          +'<div class="card-qty"><span class="card-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+'</span><span class="card-unit">'+esc(item.unit)+'</span></div>'
-          +'<div class="card-moves"><span class="move-in">'+(tIn>0?'📥 +'+tIn+' today':'—')+'</span><span class="move-out">'+(tOut>0?'📤 -'+tOut+' today':'—')+'</span></div>'
+          +'<div class="card-qty"><span class="card-num" style="color:'+m.color+'">'+r2(item.balance).toLocaleString()+'</span><span class="card-unit">'+esc(item.unit)+'</span></div>'
+          +'<div class="card-moves"><span class="move-in">'+(tIn>0?'📥 +'+r2(tIn)+' today':'—')+'</span><span class="move-out">'+(tOut>0?'📤 -'+r2(tOut)+' today':'—')+'</span></div>'
           +'<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%;background:'+m.color+'"></div></div>'
           +'<div class="card-min">Min threshold: '+item.threshold+' '+esc(item.unit)+'</div>'
           +'</div>';
@@ -2959,8 +3211,19 @@ function render() {
     if(S.history.length) {
       var movs = filteredMovements();
       var groups = groupByDay(movs);
-      var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
-      var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+      /* Sum signed ADJ correctly: positive ADJ adds to IN, negative to OUT */
+      var totalIn = movs.reduce(function(s,e){
+        var q = Number(e.qty)||0;
+        if (e.type === 'IN') return s + q;
+        if (e.type === 'ADJ' && q > 0) return s + q;
+        return s;
+      }, 0);
+      var totalOut = movs.reduce(function(s,e){
+        var q = Number(e.qty)||0;
+        if (e.type === 'OUT' || e.type === 'WASTE') return s + q;
+        if (e.type === 'ADJ' && q < 0) return s + Math.abs(q);
+        return s;
+      }, 0);
       var net = totalIn - totalOut;
 
       var cntT={today:0,week:0,month:0,all:S.history.length};
@@ -3000,11 +3263,11 @@ function render() {
         +'</div>';
       h += '<div class="mov-stats">'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Total IN</div>'
-          +'<div class="mov-stat-val" style="color:var(--green)">+'+(Math.round(totalIn*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
+          +'<div class="mov-stat-val" style="color:var(--green)">+'+(r2(totalIn))+'<span class="mov-stat-unit">kg</span></div></div>'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Total OUT</div>'
-          +'<div class="mov-stat-val" style="color:var(--red)">−'+(Math.round(totalOut*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
+          +'<div class="mov-stat-val" style="color:var(--red)">−'+(r2(totalOut))+'<span class="mov-stat-unit">kg</span></div></div>'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Net Change</div>'
-          +'<div class="mov-stat-val" style="color:'+(net>=0?'var(--green)':'var(--red)')+'">'+(net>=0?'+':'')+(Math.round(net*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
+          +'<div class="mov-stat-val" style="color:'+(net>=0?'var(--green)':'var(--red)')+'">'+(net>=0?'+':'')+(r2(net))+'<span class="mov-stat-unit">kg</span></div></div>'
         +'</div>';
       h += '<div class="mov-list">';
       if (!movs.length) {
@@ -3020,17 +3283,18 @@ function render() {
 
           h += '<div class="mov-day-hdr"><span>'+dStr+'</span>'
             +'<span class="mov-day-hdr-right">'
-            +(g.totalIn>0?'<span style="color:var(--green)">+'+(Math.round(g.totalIn*10)/10)+'</span>':'')
+            +(g.totalIn>0?'<span style="color:var(--green)">+'+(r2(g.totalIn))+'</span>':'')
             +(g.totalIn>0 && g.totalOut>0?' · ':'')
-            +(g.totalOut>0?'<span style="color:var(--red)">−'+(Math.round(g.totalOut*10)/10)+'</span>':'')
+            +(g.totalOut>0?'<span style="color:var(--red)">−'+(r2(g.totalOut))+'</span>':'')
             +' kg</span></div>';
 
           g.items.slice().sort(function(a,b){return new Date(b.ts)-new Date(a.ts);}).forEach(function(e){
-            var isIn = e.type==='IN';
+            var isIn = movDir(e) === 'IN';
+            var absQty = r2(Math.abs(Number(e.qty)||0));
             h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
               +'<span class="hist-name">'+esc(e.itemName)+'</span>'
               +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-              +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+              +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+absQty+' kg</span>'
               +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
           });
         });
@@ -3049,9 +3313,9 @@ function render() {
       var st = getStatus(item.balance, item.threshold), m = SM[st];
       var iIn = todayMoves(item.id,'IN'), iOut = todayMoves(item.id,'OUT');
       h += '<div class="bal-row"><span class="bal-name">'+esc(item.name)+'<br><span style="font-size:9px;color:var(--cream3);font-family:\'Barlow Condensed\'">'+esc(item.origin)+'</span></span>'
-        +'<span class="bal-in">'+(iIn>0?'+'+iIn+' kg':'—')+'</span>'
-        +'<span class="bal-out">'+(iOut>0?'-'+iOut+' kg':'—')+'</span>'
-        +'<span class="bal-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+' '+esc(item.unit)+'</span>'
+        +'<span class="bal-in">'+(iIn>0?'+'+r2(iIn)+' kg':'—')+'</span>'
+        +'<span class="bal-out">'+(iOut>0?'-'+r2(iOut)+' kg':'—')+'</span>'
+        +'<span class="bal-num" style="color:'+m.color+'">'+r2(item.balance).toLocaleString()+' '+esc(item.unit)+'</span>'
         +'<span><span class="badge '+m.cls+'">'+m.lbl+'</span></span></div>';
     });
     h += '</div>';
@@ -3060,11 +3324,12 @@ function render() {
     if(todHist.length) {
       h += '<div class="hist-panel"><div class="hist-head"><span>All movements today</span><span style="font-size:9px">'+todHist.length+' records</span></div><div class="hist-scroll">';
       todHist.forEach(function(e){
-        var isIn = e.type==='IN';
+        var isIn = movDir(e) === 'IN';
+        var absQty = r2(Math.abs(Number(e.qty)||0));
         h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
           +'<span class="hist-name">'+esc(e.itemName)+'</span>'
           +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+absQty+' kg</span>'
           +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
       });
       h += '</div></div>';
@@ -3115,11 +3380,20 @@ function render() {
       var productLabel = selectedItem ? selectedItem.name : 'All Products';
       var unit = selectedItem ? selectedItem.unit : 'kg';
 
-      // Summary cards
-      var totIn=0, totOut=0, totWaste=0, totAdj=0;
-      rows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
-      var openBal  = rows.length ? rows[0].open  : 0;
-      var closeBal = rows.length ? rows[rows.length-1].close : 0;
+      // Summary cards — per spec: +ADJ counts as IN, -ADJ counts as OUT.
+      // We still expose the raw adj total separately for an audit-trail card.
+      var totIn=0, totOut=0, totWaste=0, totAdj=0, totAdjPos=0, totAdjNeg=0;
+      rows.forEach(function(r){
+        totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj;
+        if(r.adj > 0) totAdjPos += r.adj;
+        else if(r.adj < 0) totAdjNeg += Math.abs(r.adj);
+      });
+      var openBal  = r2(rows.length ? rows[0].open  : 0);
+      var closeBal = r2(rows.length ? rows[rows.length-1].close : 0);
+      // Bucketed totals: IN includes positive ADJ; OUT includes negative ADJ
+      var bucketIn  = r2(totIn + totAdjPos);
+      var bucketOut = r2(totOut + totAdjNeg);
+      totIn=r2(totIn); totOut=r2(totOut); totWaste=r2(totWaste); totAdj=r2(totAdj);
 
       h += '<div class="rpt-title-bar">'
         +'<div><div class="rpt-product-name">'+esc(productLabel)+'</div>'
@@ -3129,10 +3403,10 @@ function render() {
 
       h += '<div class="rpt-summary">'
         +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--cream)">'+openBal.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Opening Stock</div></div>'
-        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--green)">+'+totIn.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total IN</div></div>'
-        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--red)">-'+totOut.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total OUT</div></div>'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--green)">+'+bucketIn.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total IN</div></div>'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--red)">-'+bucketOut.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total OUT</div></div>'
         +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--orange)">-'+totWaste.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total Waste</div></div>'
-        +(totAdj?'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--blue)">'+totAdj.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Adjustments</div></div>':'')
+        +(totAdj?'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--blue)">'+(totAdj>0?'+':'')+totAdj.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Adjustments (net)</div></div>':'')
         +'<div class="rpt-card rpt-card-close"><div class="rpt-card-val" style="color:var(--gold3)">'+closeBal.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Closing Stock</div></div>'
         +'</div>';
 
@@ -3150,15 +3424,15 @@ function render() {
         rows.forEach(function(r){
           var d = new Date(r.date+'T12:00:00');
           var dayLabel = d.toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'});
-          var netOk = r.close >= 0;
+          var ro = r2(r.open), ri = r2(r.in), rout = r2(r.out), rw = r2(r.waste), ra = r2(r.adj), rc = r2(r.close);
           h += '<div class="rpt-row">'
             +'<span class="rpt-date-cell">'+esc(dayLabel)+'</span>'
-            +'<span class="rpt-num">'+r.open.toLocaleString()+'</span>'
-            +'<span class="rpt-num" style="color:var(--green)">'+(r.in?'+'+r.in.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num" style="color:var(--red)">'+(r.out?'-'+r.out.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num" style="color:var(--orange)">'+(r.waste?'-'+r.waste.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num" style="color:var(--blue)">'+(r.adj?r.adj.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num rpt-close" style="color:'+(r.close<=0?'var(--red)':r.close<(selectedItem?selectedItem.threshold:50)?'var(--orange)':'var(--gold3)')+'">'+r.close.toLocaleString()+'</span>'
+            +'<span class="rpt-num">'+ro.toLocaleString()+'</span>'
+            +'<span class="rpt-num" style="color:var(--green)">'+(ri?'+'+ri.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--red)">'+(rout?'-'+rout.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--orange)">'+(rw?'-'+rw.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--blue)">'+(ra?(ra>0?'+':'')+ra.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num rpt-close" style="color:'+(rc<=0?'var(--red)':rc<(selectedItem?selectedItem.threshold:50)?'var(--orange)':'var(--gold3)')+'">'+rc.toLocaleString()+'</span>'
             +'</div>';
         });
         h += '</div></div>';
@@ -3173,14 +3447,19 @@ function render() {
     h = renderIncoming(h);
   } else if(S.view === 'provision') {
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
-    var outItems  = needItems.filter(function(i){ return i.balance === 0; });
-    var lowItems  = needItems.filter(function(i){ return i.balance > 0; });
+    var outItems  = needItems.filter(function(i){ return getStatus(i.balance,i.threshold) === 'OUT'; });
+    var lowItems  = needItems.filter(function(i){ return getStatus(i.balance,i.threshold) === 'LOW'; });
     h += '<div class="section-label">Provisioning & Purchase Planner</div>';
     h += '<div class="prov-wrap">';
     h += '<div class="prov-summary">'
       +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--red)">'+outItems.length+'</div><div class="prov-stat-lbl">Out of Stock</div></div>'
       +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--orange)">'+lowItems.length+'</div><div class="prov-stat-lbl">Low Stock</div></div>'
-      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--gold2)">'+needItems.reduce(function(s,i){return s+(Math.max(i.threshold*2,i.threshold-i.balance+50));},0).toLocaleString()+'</div><div class="prov-stat-lbl">Total kg to Order</div></div>'
+      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--gold2)">'+needItems.reduce(function(s,i){
+          var def = Math.max(0, i.threshold - i.balance);
+          var daily = avgDailyUsage(i.id);
+          var cov = daily > 0 ? Math.ceil(def + daily * 14) : Math.max(i.threshold * 2, def + i.threshold);
+          return s + Math.max(i.threshold * 2, cov);
+        },0).toLocaleString()+'</div><div class="prov-stat-lbl">Total kg to Order</div></div>'
       +(S.teamUnlocked?'<div style="display:flex;align-items:center;padding:0 4px"><button class="btn-copy-prov" id="copyProvBtn">📋 Copy Order List</button></div>':'')
       +'</div>';
     if(!needItems.length) {
@@ -3190,14 +3469,14 @@ function render() {
         +'<div class="prov-hdr"><span>Coffee Bean</span><span>Current</span><span>Min Level</span><span>Deficit</span><span>Avg/Day</span><span>Suggested Order</span><span>Status</span></div>';
       needItems.forEach(function(item){
         var st = getStatus(item.balance,item.threshold), m = SM[st];
-        var deficit = Math.max(0, item.threshold - item.balance);
+        var deficit = Math.max(0, r2(item.threshold - item.balance));
         var daily = avgDailyUsage(item.id);
         // Smart suggestion: cover deficit + 14 days of usage (or at least threshold*2)
         var coverDays = daily > 0 ? Math.ceil((deficit + daily * 14)) : Math.max(item.threshold * 2, deficit + item.threshold);
         var suggested = Math.max(item.threshold * 2, coverDays);
         h += '<div class="prov-row">'
           +'<span class="prov-name">'+esc(item.name)+'<div class="prov-note">'+esc(item.origin)+'</div></span>'
-          +'<span style="color:'+m.color+';font-weight:600">'+item.balance+' '+esc(item.unit)+'</span>'
+          +'<span style="color:'+m.color+';font-weight:600">'+r2(item.balance)+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--cream3)">'+item.threshold+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--red)">'+deficit+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--cream3)">'+(daily > 0 ? daily+' '+esc(item.unit) : '—')+'</span>'
@@ -3353,11 +3632,11 @@ function render() {
             +'<button class="btn-save-bal" data-savebal="'+item.id+'">✓</button>'
             +'<button class="btn-cancel" style="padding:3px 6px;font-size:10px" data-cancelbal="'+item.id+'">✕</button></span>'
           : '<span style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:'+m.color+';font-weight:600;display:flex;align-items:center;justify-content:flex-end;gap:5px">'
-            +item.balance+' '+esc(item.unit)
-            +'<button class="btn-edit-bal" data-editbal="'+item.id+'" data-editbalval="'+item.balance+'" title="Edit balance">✏️</button></span>'
+            +r2(item.balance)+' '+esc(item.unit)
+            +'<button class="btn-edit-bal" data-editbal="'+item.id+'" data-editbalval="'+r2(item.balance)+'" title="Edit balance">✏️</button></span>'
         )
-        +'<span style="text-align:right;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+(tIn2?'+'+tIn2:'—')+'</span>'
-        +'<span style="text-align:right;color:var(--red);font-family:\'JetBrains Mono\',monospace">'+(tOut2?'-'+tOut2:'—')+'</span>'
+        +'<span style="text-align:right;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+(tIn2?'+'+r2(tIn2):'—')+'</span>'
+        +'<span style="text-align:right;color:var(--red);font-family:\'JetBrains Mono\',monospace">'+(tOut2?'-'+r2(tOut2):'—')+'</span>'
         +'<span style="text-align:center"><span class="badge '+m.cls+'">'+m.lbl+'</span></span>'
         +'<span style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">'
         +'<button class="btn-log-in" data-logid="'+item.id+'" data-logtype="IN">📥 IN</button>'
@@ -3464,7 +3743,8 @@ function render() {
         grouped[day].forEach(function(e){
           if(shownSoFar >= totalShown) return;
           shownSoFar++;
-          var isIn = e.type==='IN';
+          var isIn = movDir(e) === 'IN';
+          var absQty = r2(Math.abs(Number(e.qty)||0));
           var entryComments = S.comments[String(e.id)] || [];
           var showComments = S.openCommentId === e.id;
           h += '<div style="border-bottom:1px solid var(--border)">'
@@ -3472,7 +3752,7 @@ function render() {
             +'<span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
             +'<span class="hist-name">'+esc(e.itemName)+'</span>'
             +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-            +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+            +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+absQty+' kg</span>'
             +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'<span></span>')
             +'<div style="display:flex;gap:4px;flex-shrink:0">'
             +'<button class="comment-badge" data-opencomment="'+esc(e.id)+'" title="Comments">💬'+(entryComments.length?' '+entryComments.length:'')+'</button>'
@@ -3798,9 +4078,10 @@ function render() {
       h += '<div class="alerts-list" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">';
       pAlerts.forEach(function(a){
         var isCrit = a.sev === 'CRITICAL';
-        var icon = a.item.balance===0 ? '🚨' : isCrit ? '⛔' : '⚠️';
+        var isOut = getStatus(a.item.balance, a.item.threshold) === 'OUT';
+        var icon = isOut ? '🚨' : isCrit ? '⛔' : '⚠️';
         var daysTxt = '';
-        if (a.item.balance === 0) daysTxt = '<div class="alert-card-days" style="color:var(--red)">📍 Out of stock — restock urgently</div>';
+        if (isOut) daysTxt = '<div class="alert-card-days" style="color:var(--red)">📍 Out of stock — restock urgently</div>';
         else if (a.daysLeft != null) {
           var dColor = a.daysLeft <= 3 ? 'var(--red)' : a.daysLeft <= 7 ? 'var(--orange)' : 'var(--cream3)';
           daysTxt = '<div class="alert-card-days" style="color:'+dColor+'">⏱ ~'+a.daysLeft+' day'+(a.daysLeft===1?'':'s')+' of stock left</div>';
@@ -3868,7 +4149,18 @@ function bindEvents() {
   document.querySelectorAll('[data-filter]').forEach(function(b){
     b.onclick=function(){ S.filter=this.getAttribute('data-filter'); render(); };
   });
-  var si=g('searchInput'); if(si) si.oninput=function(){ S.search=this.value; render(); };
+  var si=g('searchInput');
+  if(si) si.oninput=function(){
+    S.search=this.value;
+    clearTimeout(window._siT);
+    var inp=this;
+    window._siT=setTimeout(function(){
+      var pos=inp.selectionStart;
+      render();
+      var f=document.getElementById('searchInput');
+      if(f){ f.focus(); try{ f.setSelectionRange(pos,pos); }catch(e){} }
+    }, 250);
+  };
 
   /* Alert Modal */
   var oam=g('openAlertModalBtn'); if(oam) oam.onclick=function(){ S.showAlertModal=true; render(); setTimeout(function(){ var ai=g('manualAlertInput'); if(ai) ai.focus(); },60); };
@@ -3907,12 +4199,27 @@ function bindEvents() {
   var lsb=g('logSaveBtn');
   if(lsb) lsb.onclick=function(){
     var qel=g('logQtyInput'), nel=g('logNoteInput');
-    var qty=qel?parseFloat(qel.value):parseFloat(S.logQty);
-    var note=nel?nel.value:S.logNote;
-    if(!qty||qty<=0){ S.logErr='Please enter a valid quantity.'; render(); return; }
-    var item=S.items.find(function(i){ return i.id===S.logModal; });
-    if(S.logType==='OUT'&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
-    logMovement(S.logModal,S.logType,qty,note);
+    var rawQty = qel ? qel.value : S.logQty;
+    var qty = parseFloat(rawQty);
+    var note = nel ? nel.value : S.logNote;
+    if (!isFinite(qty) || qty <= 0 || r2(qty) <= 0) {
+      S.logErr = 'Please enter a valid quantity greater than 0.';
+      render();
+      return;
+    }
+    var item = S.items.find(function(i){ return i.id === S.logModal; });
+    if (!item) {
+      S.logErr = 'Item no longer exists. Please close and try again.';
+      render();
+      return;
+    }
+    /* Both OUT and WASTE reduce balance — both must be validated */
+    if ((S.logType === 'OUT' || S.logType === 'WASTE') && r2(qty) > r2(item.balance)) {
+      S.logErr = 'Cannot remove more than current balance ('+r2(item.balance)+' '+item.unit+').';
+      render();
+      return;
+    }
+    logMovement(S.logModal, S.logType, qty, note);
   };
   var lcb=g('logCancelBtn'); if(lcb) lcb.onclick=function(){ S.logModal=null; S.logQty=''; S.logNote=''; S.logErr=''; render(); };
 
@@ -3989,7 +4296,18 @@ function bindEvents() {
   /* Team panel filters */
   var tfc=g('tpFilterCat');    if(tfc)    tfc.onchange=function(){ S.tpFilterCat=this.value; render(); };
   var tfs=g('tpFilterStatus'); if(tfs)    tfs.onchange=function(){ S.tpFilterStatus=this.value; render(); };
-  var tfs2=g('tpSearch');      if(tfs2)   tfs2.oninput=function(){ S.tpFilterSearch=this.value; render(); };
+  var tfs2=g('tpSearch');
+  if(tfs2) tfs2.oninput=function(){
+    S.tpFilterSearch=this.value;
+    clearTimeout(window._tpsT);
+    var inp=this;
+    window._tpsT=setTimeout(function(){
+      var pos=inp.selectionStart;
+      render();
+      var f=document.getElementById('tpSearch');
+      if(f){ f.focus(); try{ f.setSelectionRange(pos,pos); }catch(e){} }
+    }, 250);
+  };
 
   /* Category manager */
   var tcm=g('toggleCatMgr');   if(tcm) tcm.onclick=function(){ S.showCatMgr=!S.showCatMgr; render(); };
@@ -4038,7 +4356,7 @@ function bindEvents() {
     S.items.forEach(function(item){
       var st=SM[getStatus(item.balance,item.threshold)].lbl;
       var tI=todayMoves(item.id,'IN'), tO=todayMoves(item.id,'OUT');
-      lines.push([item.name,item.category,item.balance,item.unit,st,tI,tO].join(','));
+      lines.push([item.name,item.category,r2(item.balance),item.unit,st,r2(tI),r2(tO)].join(','));
     });
     var blob=new Blob([lines.join('\n')],{type:'text/csv'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
@@ -4123,9 +4441,14 @@ function bindEvents() {
       var dl=d.toLocaleDateString([],{day:'2-digit',month:'short',year:'numeric'});
       lines.push(dl.padEnd(13)+' | '+pad(r.open,7)+' | '+pad(r.in,7)+' | '+pad(r.out,7)+' | '+pad(r.waste,7)+' | '+pad(r.adj,7)+' | '+pad(r.close,7));
     });
-    var totIn=0,totOut=0,totWaste=0,totAdj=0;
-    S.rptRows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
-    lines.push('','SUMMARY','Total IN: '+totIn+' | Total OUT: '+totOut+' | Total Waste: '+totWaste+' | Opening: '+S.rptRows[0].open+' | Closing: '+S.rptRows[S.rptRows.length-1].close);
+    var totIn=0,totOut=0,totWaste=0,totAdj=0,totAdjPos=0,totAdjNeg=0;
+    S.rptRows.forEach(function(r){
+      totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj;
+      if(r.adj>0) totAdjPos+=r.adj;
+      else if(r.adj<0) totAdjNeg+=Math.abs(r.adj);
+    });
+    var bIn = r2(totIn + totAdjPos), bOut = r2(totOut + totAdjNeg);
+    lines.push('','SUMMARY','Total IN: '+bIn+' | Total OUT: '+bOut+' | Total Waste: '+r2(totWaste)+' | Adjustments (net): '+r2(totAdj)+' | Opening: '+r2(S.rptRows[0].open)+' | Closing: '+r2(S.rptRows[S.rptRows.length-1].close));
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Report copied to clipboard!'); });
   };
   /* ── Settings panel ─────────────────────────────────────────────── */
@@ -4338,9 +4661,12 @@ function bindEvents() {
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
     var lines = ['Windmill Cafe & Roastery — Purchase Order', new Date().toLocaleDateString(), ''];
     needItems.forEach(function(item){
-      var deficit = Math.max(0, item.threshold - item.balance);
-      var suggested = Math.max(item.threshold*2, deficit+item.threshold);
-      lines.push(item.name+' ('+item.origin+'): '+suggested+' '+item.unit+' — current stock: '+item.balance+' '+item.unit);
+      /* Use same formula as the per-row Suggested Order column for consistency */
+      var deficit = Math.max(0, r2(item.threshold - item.balance));
+      var daily = avgDailyUsage(item.id);
+      var coverDays = daily > 0 ? Math.ceil(deficit + daily * 14) : Math.max(item.threshold * 2, deficit + item.threshold);
+      var suggested = Math.max(item.threshold * 2, coverDays);
+      lines.push(item.name+' ('+item.origin+'): '+suggested+' '+item.unit+' — current stock: '+r2(item.balance)+' '+item.unit);
     });
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Order list copied to clipboard!'); });
   };
