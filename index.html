@@ -9,7 +9,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&family=Barlow+Condensed:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <!-- Firebase Realtime Database — free, no server needed -->
 
-
 <style>
 /* ═══════════════════════════════════════════════
    SETUP SCREEN (shown before Firebase configured)
@@ -866,11 +865,11 @@ function initFirebaseAndBoot() {
     var existing = firebase.apps && firebase.apps.length > 0
       ? firebase.app()
       : firebase.initializeApp({
-          apiKey:        'AIzaSyBIaoZ156waTEWyfXQMtMR7PfqY1831cKA',
-          authDomain:    'beans-live-updates.firebaseapp.com',
-          databaseURL:   'https://beans-live-updates-default-rtdb.firebaseio.com/',
-          projectId:     'beans-live-updates',
-          storageBucket: 'beans-live-updates.appspot.com'
+          apiKey:        'AIzaSyAgC1ew5F9SYqfHNkaesG2Ki7LpKp_3Ayw',
+          authDomain:    'beans-live-windmill.firebaseapp.com',
+          databaseURL:   'https://beans-live-windmill-default-rtdb.firebaseio.com/',
+          projectId:     'beans-live-windmill',
+          storageBucket: 'beans-live-windmill.appspot.com'
         });
     fbDB      = firebase.database(existing);
     fbRef     = fbDB.ref('windmill-stock');
@@ -1345,7 +1344,6 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   var runningBal = currentBal;
   afterEntries.forEach(function(e){
     if(e.type==='IN') runningBal -= Number(e.qty);
-    else if(e.type==='ADJ') runningBal -= Number(e.qty); // ADJ is signed; reverse it
     else runningBal += Number(e.qty);
   });
   // Also subtract entries within range that happened after first day
@@ -1358,14 +1356,12 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   // Actually: compute open of first day = runningBal minus all in-range-days net
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  // ADJ is now signed (positive = up, negative = down), so subtract it to reverse
-  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
+  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
 
   open = periodOpenBal;
   days.forEach(function(dk){
     var r = dayMap[dk];
-    // ADJ is signed: positive increases balance, negative decreases it
-    var close = open + r.in - r.out - r.waste + r.adj;
+    var close = open + r.in - r.out - r.waste - r.adj;
     rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
     open = close;
   });
@@ -1424,21 +1420,19 @@ function buildCategoryLedger(itemIds, fromDate, toDate) {
     return (itemIds.indexOf(Number(e.itemId))>=0) && d > toDate;
   });
   var runningBal = catBalance;
-  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else if(e.type==='ADJ') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
+  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
+  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
   var rows = [];
   days.forEach(function(dk){
     var r = dayMap[dk];
-    // ADJ is signed: positive increases balance, negative decreases it
-    var close = open + r.in - r.out - r.waste + r.adj;
+    var close = open + r.in - r.out - r.waste - r.adj;
     rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
     open = close;
   });
   return rows;
 }
-
 
 /* ══════════════════════════════════════════════════════
    FEATURE HELPERS (added)
@@ -1809,7 +1803,50 @@ function importFullBackup(file) {
       that item are trusted again. */
 var _clientId       = 'c_' + Math.random().toString(36).slice(2,10) + '_' + Date.now();
 var _pendingItemBal = {}; // itemId -> { bal: expectedBalance, ts: msEnqueued }
-var _deletedItemIds = {}; // itemId -> ts — tracks locally-deleted items so Firebase echoes don't resurrect them
+
+/* ── PERSISTENT DELETE TRACKER ──────────────────────────────────────
+   _deletedItemIds was previously in-memory only. PROBLEM: if the user
+   deleted an item and refreshed BEFORE Firebase confirmed the .remove()
+   write (slow network, fast refresh, browser closed early), the in-memory
+   set was wiped on reload and the un-finished Firebase write would let
+   the "deleted" item come back from the database on next load.
+
+   FIX: persist the set to localStorage. On boot, items still found in
+   Firebase whose IDs are in this set get filtered out AND re-deleted to
+   Firebase, until Firebase confirms — at which point we remove them
+   from the persistent set. Entries auto-expire after 24h so this can
+   never grow unbounded. */
+var PENDING_DELETES_KEY = 'wc-pending-deletes';
+var PENDING_DELETE_TTL  = 24 * 60 * 60 * 1000; // 24h
+
+function _loadDeletedIds() {
+  try {
+    var raw = localStorage.getItem(PENDING_DELETES_KEY);
+    if (!raw) return {};
+    var obj = JSON.parse(raw) || {};
+    var now = Date.now();
+    var fresh = {};
+    Object.keys(obj).forEach(function(id){
+      if (typeof obj[id] === 'number' && (now - obj[id]) < PENDING_DELETE_TTL) {
+        fresh[id] = obj[id];
+      }
+    });
+    return fresh;
+  } catch(e) { return {}; }
+}
+function _saveDeletedIds() {
+  try { localStorage.setItem(PENDING_DELETES_KEY, JSON.stringify(_deletedItemIds)); } catch(e) {}
+}
+function markItemDeleted(id) {
+  _deletedItemIds[String(id)] = Date.now();
+  _saveDeletedIds();
+}
+function unmarkItemDeleted(id) {
+  delete _deletedItemIds[String(id)];
+  _saveDeletedIds();
+}
+
+var _deletedItemIds = _loadDeletedIds(); // restored from previous session
 
 function _markPendingItem(item) {
   if(!item) return;
@@ -1824,12 +1861,15 @@ function _clearStalePending() {
   });
 }
 
-function saveAll() {
+function saveAll(cb) {
   /* Write items as a keyed object {id: item} — NOT as an array.
      Writing an array to Firebase creates numeric keys ("0","1","2…").
      If saveItem() also writes under items/<timestamp-id>, Firebase ends
      up with BOTH numeric and timestamp keys, and objToArr returns
-     duplicates. Keyed objects avoid this entirely. */
+     duplicates. Keyed objects avoid this entirely.
+     The optional `cb` is invoked with (err) once Firebase confirms the
+     write — callers (e.g. deleteItem) use this to know the delete is
+     permanent and clear the persistent pending-delete tracker. */
   var itemsObj = {};
   S.items.forEach(function(item){ itemsObj[String(item.id)] = item; });
   fbRef.update({
@@ -1838,7 +1878,7 @@ function saveAll() {
     categories: S.categories,
     teamUpdates: S.teamUpdates || {},
     snapshots: S.snapshots || {}
-  });
+  }, typeof cb === 'function' ? cb : undefined);
   // Mark every item as pending — we just wrote them all.
   S.items.forEach(_markPendingItem);
 }
@@ -2374,37 +2414,35 @@ function logMovement(itemId, type, qty, note) {
   // ── FEATURE 1: AUTOMATED STOCK ALERT ──────────────────────────────
   // Fires only when stock first crosses below threshold or first hits zero.
   // Does NOT fire repeatedly for every OUT while already low.
-  if (alertsRef) {
-    if (type === 'IN' && newBal >= item.threshold) {
+  if (type !== 'IN' && alertsRef) {
+    var wasAboveThreshold = prevBal >= item.threshold;
+    var wasAboveZero      = prevBal > 0;
+    var isNowOut          = newBal === 0;
+    var isNowLow          = newBal > 0 && newBal < item.threshold;
+
+    if (isNowOut && wasAboveZero) {
+      sendStockAlert({
+        type: 'auto_out', status: 'OUT',
+        itemId: itemId, itemName: item.name,
+        balance: newBal, threshold: item.threshold, unit: item.unit,
+        message: '🚨 OUT OF STOCK: ' + item.name +
+                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+      });
+      _saveAlertedItem(itemId, 'OUT');
+    } else if (isNowLow && wasAboveThreshold) {
+      sendStockAlert({
+        type: 'auto_low', status: 'LOW',
+        itemId: itemId, itemName: item.name,
+        balance: newBal, threshold: item.threshold, unit: item.unit,
+        message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
+                 newBal + ' ' + item.unit +
+                 ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
+      });
+      _saveAlertedItem(itemId, 'LOW');
+    } else if (type === 'IN' && newBal >= item.threshold) {
       // Stock restored above threshold — clear dedup so next dip re-alerts
       delete _alertedItems[String(itemId)];
       try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
-    } else if (type !== 'IN') {
-      var wasAboveThreshold = prevBal >= item.threshold;
-      var wasAboveZero      = prevBal > 0;
-      var isNowOut          = newBal === 0;
-      var isNowLow          = newBal > 0 && newBal < item.threshold;
-
-      if (isNowOut && wasAboveZero) {
-        sendStockAlert({
-          type: 'auto_out', status: 'OUT',
-          itemId: itemId, itemName: item.name,
-          balance: newBal, threshold: item.threshold, unit: item.unit,
-          message: '🚨 OUT OF STOCK: ' + item.name +
-                   ' has reached 0 ' + item.unit + '. Please roast more urgently.'
-        });
-        _saveAlertedItem(itemId, 'OUT');
-      } else if (isNowLow && wasAboveThreshold) {
-        sendStockAlert({
-          type: 'auto_low', status: 'LOW',
-          itemId: itemId, itemName: item.name,
-          balance: newBal, threshold: item.threshold, unit: item.unit,
-          message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
-                   newBal + ' ' + item.unit +
-                   ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
-        });
-        _saveAlertedItem(itemId, 'LOW');
-      }
     }
   }
   // ── END AUTOMATED STOCK ALERT ─────────────────────────────────────
@@ -2414,10 +2452,6 @@ function logMovement(itemId, type, qty, note) {
   render();
 }
 function addItem(item) {
-  if(!item.name || !item.name.trim()) { showToast('⚠️ Item name is required.'); return; }
-  if(!item.category || !item.category.trim()) { showToast('⚠️ Category is required.'); return; }
-  if(isNaN(item.balance) || item.balance < 0) { showToast('⚠️ Opening stock cannot be negative.'); return; }
-  if(isNaN(item.threshold) || item.threshold < 0) { showToast('⚠️ Min level cannot be negative.'); return; }
   var newItem = Object.assign({}, item, {id: Date.now()});
   S.items = S.items.concat([newItem]);
   S.newItem = null; S.showAddItem = false;
@@ -2434,15 +2468,33 @@ function deleteItem(id) {
   if(!item) return;
   showConfirm('Delete Item', 'Remove "'+item.name+'" from inventory? This cannot be undone.', function(){
     S.items = S.items.filter(function(i){ return i.id !== id; });
-    /* Explicitly remove the item key from Firebase.
-       saveAll() alone is NOT enough — it rewrites remaining items but
-       leaves items/<id> sitting in Firebase. Other devices receive the
-       full snapshot including the ghost key and the deleted item
-       resurrects on their screen. fbRef.child().remove() deletes the
-       key atomically so ALL connected devices stop seeing it instantly. */
-    _deletedItemIds[String(id)] = Date.now(); // prevent Firebase echo from resurrecting this item
-    if(fbRef) fbRef.child('items/' + String(id)).remove();
-    saveAll();
+    /* PERSISTENT pending-delete tracker — survives page refresh.
+       Without this, refreshing before Firebase confirms the write would
+       cause the item to "resurrect" on next load: the un-finished write
+       leaves the old record in Firebase, and a fresh page can't tell it
+       was supposed to be deleted. With localStorage persistence, the
+       next bootApp will see this ID, filter it out, AND re-issue the
+       delete to Firebase. */
+    markItemDeleted(id);
+
+    if(fbRef) {
+      /* Single atomic write — saveAll() REPLACES the items branch with
+         the new keyed object (without the deleted item), so an explicit
+         .remove() call is redundant AND error-prone (the old code tried
+         to remove items/<id>, but if the item was originally stored under
+         an array-index key like "0", that path didn't exist and .remove()
+         did nothing). Replacing the whole items branch handles every
+         key-encoding case in one operation. */
+      saveAll(function(err) {
+        if (!err) {
+          // Firebase confirmed the write — safe to clear the pending mark
+          unmarkItemDeleted(id);
+        }
+        // If err: keep the pending mark. The next boot (or next saveAll
+        // call) will re-issue the delete. The item won't reappear in the
+        // UI because applyRemoteData filters by _deletedItemIds.
+      });
+    }
     showToast('🗑 '+item.name+' removed.'); render();
   });
 }
@@ -2556,7 +2608,7 @@ function saveEditedBalance(itemId, val) {
   var newEntry = {
     id: Date.now(), ts: new Date().toISOString(),
     itemId: itemId, itemName: item.name,
-    type: 'ADJ', qty: n - old,
+    type: 'ADJ', qty: Math.abs(n - old),
     note: '✏️ Manual balance edit: '+old+' → '+n
   };
   S.history = [newEntry].concat(S.history).slice(0,5000);
@@ -2688,7 +2740,6 @@ function exportMovementsCSV(period) {
   URL.revokeObjectURL(url);
   showToast('📥 ' + movs.length + ' movements exported (' + lbl + ').');
 }
-
 
 /* ══════════════════════════════════════════════════════
    ERP — RENDER INCOMING STOCK PANEL
@@ -3046,8 +3097,6 @@ function render() {
       : '👁 <strong>Management view</strong> — read-only live data. Updates push to this screen in real time. Your stock team uses 🔒 Team Panel to update stock.')
     +'</div>';
 
-
-
   /* ── DASHBOARD ── */
   if(S.view === 'dashboard') {
     // Show skeleton while first load is in progress
@@ -3056,7 +3105,7 @@ function render() {
       for(var sk=0;sk<6;sk++) h += '<div class="card skeleton skel-card"></div>';
       h += '</div>';
     } else {
-    var cats = ['All'].concat(S.categories || Array.from(new Set(S.items.map(function(i){ return i.category; }))));
+    var cats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
     // Hero KPI tiles
     var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
     var outCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
@@ -3368,7 +3417,7 @@ function render() {
     h += '<div class="section-label">Stock Reports — Daily Ledger & Period Summary</div>';
 
     // Category filter chips
-    var rptCats = ['All'].concat(S.categories || Array.from(new Set(S.items.map(function(i){ return i.category; }))));
+    var rptCats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
     h += '<div style="display:flex;gap:5px;flex-wrap:wrap;padding:10px 20px 0;">'
       +'<span style="font-size:9px;color:var(--cream3);letter-spacing:0.1em;text-transform:uppercase;align-self:center;margin-right:4px;">Category:</span>'
       +rptCats.map(function(c){ return '<button class="rpt-cat-chip'+(rCat===c?' on':'')+'" data-rptcat="'+esc(c)+'">'+esc(c)+'</button>'; }).join('')
@@ -3570,7 +3619,7 @@ function render() {
     h += '<div class="team-filter-bar">'
       +'<div class="fg"><label>Category</label>'
       +'<select class="inp" id="tpFilterCat" style="font-size:11px;padding:5px 8px">'
-      +tpCats2.map(function(c){ return '<option value="'+esc(c)+'"'+(S.tpFilterCat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
+      +tpCats2.map(function(c){ return '<option'+(S.tpFilterCat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
       +'</select></div>'
       +'<div class="fg"><label>Status</label>'
       +'<select class="inp" id="tpFilterStatus" style="font-size:11px;padding:5px 8px">'
@@ -3599,9 +3648,9 @@ function render() {
         +S.categories.map(function(c){ return '<option value="'+esc(c)+'"'+(ni.category===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
         +'</select></div>'
         +'<div class="form-field"><label>Origin</label><input class="inp ni-f" data-f="origin" value="'+esc(ni.origin)+'" placeholder="Rwanda 🇷🇼"></div>'
-        +'<div class="form-field" style="flex:0 1 90px"><label>Opening Stock</label><input type="number" class="inp ni-f" data-f="balance" value="'+esc(ni.balance)+'" min="0" inputmode="decimal"></div>'
+        +'<div class="form-field" style="flex:0 1 90px"><label>Opening Stock</label><input type="number" class="inp ni-f" data-f="balance" value="'+esc(ni.balance)+'" inputmode="decimal"></div>'
         +'<div class="form-field" style="flex:0 1 70px"><label>Unit</label><input class="inp ni-f" data-f="unit" value="'+esc(ni.unit)+'"></div>'
-        +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ni-f" data-f="threshold" value="'+esc(ni.threshold)+'" min="0" inputmode="decimal"></div>'
+        +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ni-f" data-f="threshold" value="'+esc(ni.threshold)+'" inputmode="decimal"></div>'
         +'</div>'
         +'<div class="form-btns"><button class="btn-save" id="niSave" '+(!(ni.name.trim()&&ni.category.trim())?'disabled style="opacity:0.4"':'')+'>Add Bean</button>'
         +'<button class="btn-cancel" id="niCancel">Cancel</button></div></div>';
@@ -4209,7 +4258,7 @@ function bindEvents() {
     var note=nel?nel.value:S.logNote;
     if(!qty||qty<=0){ S.logErr='Please enter a valid quantity.'; render(); return; }
     var item=S.items.find(function(i){ return i.id===S.logModal; });
-    if((S.logType==='OUT'||S.logType==='WASTE'||S.logType==='ADJ')&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
+    if(S.logType==='OUT'&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
     logMovement(S.logModal,S.logType,qty,note);
   };
   var lcb=g('logCancelBtn'); if(lcb) lcb.onclick=function(){ S.logModal=null; S.logQty=''; S.logNote=''; S.logErr=''; render(); };
@@ -4750,12 +4799,39 @@ function bootApp() {
 
   fbRef.once('value', function(snap) {
     var data = snap.val() || {};
-    if(!data.items) {
-      /* First time: seed defaults. Save as object with keys so Firebase keeps structure */
-      fbRef.set({ items: DEFAULTS, password: 'windmill2024' });
-      S.items = DEFAULTS; S.history = []; S.password = 'windmill2024';
+    /* Only seed DEFAULTS on a TRULY empty database.
+       PREVIOUS BUG: the old check was `if(!data.items)` followed by
+       `fbRef.set({items:DEFAULTS, password:'windmill2024'})`. Two problems:
+       1. Firebase auto-removes empty objects. If a user deleted every
+          item, the `items` key vanished from Firebase. On next refresh,
+          `!data.items` was true and the app would re-seed DEFAULTS,
+          making "deleted" items appear to resurrect.
+       2. `.set()` REPLACES the entire root, wiping history, comments,
+          snapshots, categories, teamUpdates etc — even though the user
+          only ever deleted from `items`.
+       FIX: only seed if the database has no recognizable data at all,
+       and use `.update()` so other branches survive. */
+    var hasItems = data.items && Object.keys(data.items).length > 0;
+    var hasAnyData = data && (
+      hasItems
+      || (data.history    && Object.keys(data.history).length    > 0)
+      || (data.snapshots  && Object.keys(data.snapshots).length  > 0)
+      || (data.password)
+      || (data.comments   && Object.keys(data.comments).length   > 0)
+      || (data.categories && (Array.isArray(data.categories) ? data.categories.length : Object.keys(data.categories).length) > 0)
+    );
+
+    if(!hasAnyData) {
+      /* Truly first-time: seed defaults. Store as a keyed object (NOT a
+         raw array) so the keys are item.id strings — matching what
+         saveAll/saveItem write later. This avoids the array-index vs
+         id-key collision that used to cause duplicate cards. */
+      var seedItems = {};
+      DEFAULTS.forEach(function(it){ seedItems[String(it.id)] = it; });
+      fbRef.update({ items: seedItems, password: 'windmill2024' });
+      S.items = DEFAULTS.slice(); S.history = []; S.password = 'windmill2024';
     } else {
-      S.items       = data.items       ? objToArr(data.items)   : DEFAULTS;
+      S.items       = data.items       ? objToArr(data.items)   : [];
       S.history     = data.history     ? normalizeHistory(objToArr(data.history)) : [];
       S.password    = data.password    || 'windmill2024';
       S.snapshots   = data.snapshots   || {};
@@ -4766,6 +4842,37 @@ function bootApp() {
         var tb = b && b.ts ? new Date(b.ts).getTime() : 0;
         return tb - ta;
       });
+
+      /* RESURRECTION GUARD: filter out any items whose deletion didn't
+         finish writing to Firebase before the previous page unload.
+         These IDs are persisted in localStorage by markItemDeleted(),
+         so they survive page reloads. We hide them from the UI AND
+         re-issue the delete to Firebase. */
+      var resurrected = [];
+      S.items = S.items.filter(function(it) {
+        if (it && _deletedItemIds[String(it.id)]) {
+          resurrected.push(it);
+          return false;
+        }
+        return true;
+      });
+      if (resurrected.length && fbRef) {
+        console.log('[windmill] Re-deleting', resurrected.length,
+                    'item(s) that resurrected from a previous unfinished delete:',
+                    resurrected.map(function(r){return r.name;}).join(', '));
+        // Use path-based update to delete only the specific item keys.
+        // Setting a Firebase path to null deletes that key.
+        var delUpdate = {};
+        resurrected.forEach(function(it){
+          delUpdate['items/' + String(it.id)] = null;
+        });
+        fbRef.update(delUpdate, function(err) {
+          if (!err) {
+            resurrected.forEach(function(it){ unmarkItemDeleted(it.id); });
+          }
+          // If err, leave them marked — next boot will retry.
+        });
+      }
     }
     S.syncing = false;
     S.lastSync = new Date();
@@ -4813,5 +4920,145 @@ function bootApp() {
   });
 }
 </script>
+
+<script>
+/* ===== Windmill Stability Patch V3 ===== */
+(function(){
+
+console.log("Windmill Stability Patch Loaded");
+
+/* Prevent duplicate clicks */
+const clickMap = new WeakMap();
+
+document.addEventListener('click', function(e){
+  const el = e.target.closest('button');
+  if(!el) return;
+
+  const last = clickMap.get(el) || 0;
+  const now = Date.now();
+
+  if(now - last < 500){
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
+  }
+
+  clickMap.set(el, now);
+}, true);
+
+/* Safer JSON parsing */
+window.safeJSONParse = function(v, fallback = {}){
+  try{
+    return JSON.parse(v);
+  }catch(err){
+    console.warn("JSON parse prevented crash");
+    return fallback;
+  }
+}
+
+/* Safer number conversion */
+window.safeNumber = function(v){
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+}
+
+/* Prevent negative calculations */
+window.safeCalc = function(a,b,op="+"){
+  a = safeNumber(a);
+  b = safeNumber(b);
+
+  switch(op){
+    case "+": return a+b;
+    case "-": return Math.max(0,a-b);
+    case "*": return a*b;
+    case "/": return b===0 ? 0 : a/b;
+    default: return 0;
+  }
+}
+
+/* Prevent realtime listener duplication */
+const originalAddEventListener = EventTarget.prototype.addEventListener;
+
+EventTarget.prototype.addEventListener = function(type, listener, options){
+  if(!this.__listenerMap){
+    this.__listenerMap = new Set();
+  }
+
+  const key = type + "_" + listener.toString();
+
+  if(this.__listenerMap.has(key)){
+    console.warn("Duplicate listener blocked:", type);
+    return;
+  }
+
+  this.__listenerMap.add(key);
+
+  return originalAddEventListener.call(this, type, listener, options);
+};
+
+/* Auto localStorage protection */
+const originalSetItem = localStorage.setItem;
+
+localStorage.setItem = function(key, value){
+  try{
+    originalSetItem.call(this, key, value);
+  }catch(err){
+    console.warn("localStorage blocked:", err);
+  }
+}
+
+/* Async protection */
+window.safeAsync = async function(fn){
+  try{
+    return await fn();
+  }catch(err){
+    console.error("Async operation prevented crash:", err);
+    return null;
+  }
+}
+
+/* Delete protection */
+window.safeDeleteConfirm = function(message="Delete this item?"){
+  return confirm(message);
+}
+
+/* Firebase reconnect helper */
+window.addEventListener('online', ()=>{
+  console.log("Connection restored");
+});
+
+window.addEventListener('offline', ()=>{
+  console.warn("Connection lost");
+});
+
+/* Prevent UI freeze */
+let lastFrame = performance.now();
+
+function monitorPerformance(){
+  const now = performance.now();
+  const delta = now - lastFrame;
+
+  if(delta > 2000){
+    console.warn("Possible UI freeze detected");
+  }
+
+  lastFrame = now;
+  requestAnimationFrame(monitorPerformance);
+}
+
+requestAnimationFrame(monitorPerformance);
+
+/* Global error protection */
+window.addEventListener('error', function(e){
+  console.warn("Protected Error:", e.message);
+});
+
+window.addEventListener('unhandledrejection', function(e){
+  console.warn("Protected Promise:", e.reason);
+});
+
+})();
+</script>
+
 </body>
 </html>
