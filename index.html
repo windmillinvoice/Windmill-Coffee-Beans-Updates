@@ -1345,6 +1345,7 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   var runningBal = currentBal;
   afterEntries.forEach(function(e){
     if(e.type==='IN') runningBal -= Number(e.qty);
+    else if(e.type==='ADJ') runningBal -= Number(e.qty); // ADJ is signed; reverse it
     else runningBal += Number(e.qty);
   });
   // Also subtract entries within range that happened after first day
@@ -1357,12 +1358,14 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   // Actually: compute open of first day = runningBal minus all in-range-days net
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
+  // ADJ is now signed (positive = up, negative = down), so subtract it to reverse
+  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
 
   open = periodOpenBal;
   days.forEach(function(dk){
     var r = dayMap[dk];
-    var close = open + r.in - r.out - r.waste - r.adj;
+    // ADJ is signed: positive increases balance, negative decreases it
+    var close = open + r.in - r.out - r.waste + r.adj;
     rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
     open = close;
   });
@@ -1421,14 +1424,15 @@ function buildCategoryLedger(itemIds, fromDate, toDate) {
     return (itemIds.indexOf(Number(e.itemId))>=0) && d > toDate;
   });
   var runningBal = catBalance;
-  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
+  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else if(e.type==='ADJ') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
+  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
   var rows = [];
   days.forEach(function(dk){
     var r = dayMap[dk];
-    var close = open + r.in - r.out - r.waste - r.adj;
+    // ADJ is signed: positive increases balance, negative decreases it
+    var close = open + r.in - r.out - r.waste + r.adj;
     rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
     open = close;
   });
@@ -2370,35 +2374,37 @@ function logMovement(itemId, type, qty, note) {
   // ── FEATURE 1: AUTOMATED STOCK ALERT ──────────────────────────────
   // Fires only when stock first crosses below threshold or first hits zero.
   // Does NOT fire repeatedly for every OUT while already low.
-  if (type !== 'IN' && alertsRef) {
-    var wasAboveThreshold = prevBal >= item.threshold;
-    var wasAboveZero      = prevBal > 0;
-    var isNowOut          = newBal === 0;
-    var isNowLow          = newBal > 0 && newBal < item.threshold;
-
-    if (isNowOut && wasAboveZero) {
-      sendStockAlert({
-        type: 'auto_out', status: 'OUT',
-        itemId: itemId, itemName: item.name,
-        balance: newBal, threshold: item.threshold, unit: item.unit,
-        message: '🚨 OUT OF STOCK: ' + item.name +
-                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
-      });
-      _saveAlertedItem(itemId, 'OUT');
-    } else if (isNowLow && wasAboveThreshold) {
-      sendStockAlert({
-        type: 'auto_low', status: 'LOW',
-        itemId: itemId, itemName: item.name,
-        balance: newBal, threshold: item.threshold, unit: item.unit,
-        message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
-                 newBal + ' ' + item.unit +
-                 ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
-      });
-      _saveAlertedItem(itemId, 'LOW');
-    } else if (type === 'IN' && newBal >= item.threshold) {
+  if (alertsRef) {
+    if (type === 'IN' && newBal >= item.threshold) {
       // Stock restored above threshold — clear dedup so next dip re-alerts
       delete _alertedItems[String(itemId)];
       try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
+    } else if (type !== 'IN') {
+      var wasAboveThreshold = prevBal >= item.threshold;
+      var wasAboveZero      = prevBal > 0;
+      var isNowOut          = newBal === 0;
+      var isNowLow          = newBal > 0 && newBal < item.threshold;
+
+      if (isNowOut && wasAboveZero) {
+        sendStockAlert({
+          type: 'auto_out', status: 'OUT',
+          itemId: itemId, itemName: item.name,
+          balance: newBal, threshold: item.threshold, unit: item.unit,
+          message: '🚨 OUT OF STOCK: ' + item.name +
+                   ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+        });
+        _saveAlertedItem(itemId, 'OUT');
+      } else if (isNowLow && wasAboveThreshold) {
+        sendStockAlert({
+          type: 'auto_low', status: 'LOW',
+          itemId: itemId, itemName: item.name,
+          balance: newBal, threshold: item.threshold, unit: item.unit,
+          message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
+                   newBal + ' ' + item.unit +
+                   ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
+        });
+        _saveAlertedItem(itemId, 'LOW');
+      }
     }
   }
   // ── END AUTOMATED STOCK ALERT ─────────────────────────────────────
@@ -2408,6 +2414,10 @@ function logMovement(itemId, type, qty, note) {
   render();
 }
 function addItem(item) {
+  if(!item.name || !item.name.trim()) { showToast('⚠️ Item name is required.'); return; }
+  if(!item.category || !item.category.trim()) { showToast('⚠️ Category is required.'); return; }
+  if(isNaN(item.balance) || item.balance < 0) { showToast('⚠️ Opening stock cannot be negative.'); return; }
+  if(isNaN(item.threshold) || item.threshold < 0) { showToast('⚠️ Min level cannot be negative.'); return; }
   var newItem = Object.assign({}, item, {id: Date.now()});
   S.items = S.items.concat([newItem]);
   S.newItem = null; S.showAddItem = false;
@@ -2546,7 +2556,7 @@ function saveEditedBalance(itemId, val) {
   var newEntry = {
     id: Date.now(), ts: new Date().toISOString(),
     itemId: itemId, itemName: item.name,
-    type: 'ADJ', qty: Math.abs(n - old),
+    type: 'ADJ', qty: n - old,
     note: '✏️ Manual balance edit: '+old+' → '+n
   };
   S.history = [newEntry].concat(S.history).slice(0,5000);
@@ -3046,7 +3056,7 @@ function render() {
       for(var sk=0;sk<6;sk++) h += '<div class="card skeleton skel-card"></div>';
       h += '</div>';
     } else {
-    var cats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
+    var cats = ['All'].concat(S.categories || Array.from(new Set(S.items.map(function(i){ return i.category; }))));
     // Hero KPI tiles
     var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
     var outCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
@@ -3358,7 +3368,7 @@ function render() {
     h += '<div class="section-label">Stock Reports — Daily Ledger & Period Summary</div>';
 
     // Category filter chips
-    var rptCats = ['All'].concat(Array.from(new Set(S.items.map(function(i){ return i.category; }))));
+    var rptCats = ['All'].concat(S.categories || Array.from(new Set(S.items.map(function(i){ return i.category; }))));
     h += '<div style="display:flex;gap:5px;flex-wrap:wrap;padding:10px 20px 0;">'
       +'<span style="font-size:9px;color:var(--cream3);letter-spacing:0.1em;text-transform:uppercase;align-self:center;margin-right:4px;">Category:</span>'
       +rptCats.map(function(c){ return '<button class="rpt-cat-chip'+(rCat===c?' on':'')+'" data-rptcat="'+esc(c)+'">'+esc(c)+'</button>'; }).join('')
@@ -3560,7 +3570,7 @@ function render() {
     h += '<div class="team-filter-bar">'
       +'<div class="fg"><label>Category</label>'
       +'<select class="inp" id="tpFilterCat" style="font-size:11px;padding:5px 8px">'
-      +tpCats2.map(function(c){ return '<option'+(S.tpFilterCat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
+      +tpCats2.map(function(c){ return '<option value="'+esc(c)+'"'+(S.tpFilterCat===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
       +'</select></div>'
       +'<div class="fg"><label>Status</label>'
       +'<select class="inp" id="tpFilterStatus" style="font-size:11px;padding:5px 8px">'
@@ -3589,9 +3599,9 @@ function render() {
         +S.categories.map(function(c){ return '<option value="'+esc(c)+'"'+(ni.category===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
         +'</select></div>'
         +'<div class="form-field"><label>Origin</label><input class="inp ni-f" data-f="origin" value="'+esc(ni.origin)+'" placeholder="Rwanda 🇷🇼"></div>'
-        +'<div class="form-field" style="flex:0 1 90px"><label>Opening Stock</label><input type="number" class="inp ni-f" data-f="balance" value="'+esc(ni.balance)+'" inputmode="decimal"></div>'
+        +'<div class="form-field" style="flex:0 1 90px"><label>Opening Stock</label><input type="number" class="inp ni-f" data-f="balance" value="'+esc(ni.balance)+'" min="0" inputmode="decimal"></div>'
         +'<div class="form-field" style="flex:0 1 70px"><label>Unit</label><input class="inp ni-f" data-f="unit" value="'+esc(ni.unit)+'"></div>'
-        +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ni-f" data-f="threshold" value="'+esc(ni.threshold)+'" inputmode="decimal"></div>'
+        +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ni-f" data-f="threshold" value="'+esc(ni.threshold)+'" min="0" inputmode="decimal"></div>'
         +'</div>'
         +'<div class="form-btns"><button class="btn-save" id="niSave" '+(!(ni.name.trim()&&ni.category.trim())?'disabled style="opacity:0.4"':'')+'>Add Bean</button>'
         +'<button class="btn-cancel" id="niCancel">Cancel</button></div></div>';
@@ -4199,7 +4209,7 @@ function bindEvents() {
     var note=nel?nel.value:S.logNote;
     if(!qty||qty<=0){ S.logErr='Please enter a valid quantity.'; render(); return; }
     var item=S.items.find(function(i){ return i.id===S.logModal; });
-    if(S.logType==='OUT'&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
+    if((S.logType==='OUT'||S.logType==='WASTE'||S.logType==='ADJ')&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
     logMovement(S.logModal,S.logType,qty,note);
   };
   var lcb=g('logCancelBtn'); if(lcb) lcb.onclick=function(){ S.logModal=null; S.logQty=''; S.logNote=''; S.logErr=''; render(); };
