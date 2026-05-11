@@ -141,9 +141,11 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .metric-sub{font-size:9px;color:var(--cream3);margin-top:2px;opacity:0.7;}
 
 /* PENDING UPDATES BANNER */
-#pending-banner{background:rgba(200,146,60,0.08);border-bottom:1px solid rgba(200,146,60,0.2);padding:7px 20px;font-size:10px;color:var(--gold2);letter-spacing:0.08em;align-items:center;gap:8px;}
+#pending-banner{background:rgba(200,146,60,0.14);border-bottom:1px solid rgba(200,146,60,0.35);padding:8px 20px;font-size:11px;color:var(--gold3);letter-spacing:0.06em;align-items:center;gap:10px;cursor:pointer;}
+#pending-banner:hover{background:rgba(200,146,60,0.22);}
 #pending-banner.visible{display:flex;}
 #pending-banner.hidden{display:none!important;}
+#pending-banner .pending-refresh{margin-left:auto;background:rgba(200,146,60,0.25);border:1px solid var(--gold);color:var(--gold3);padding:3px 10px;border-radius:5px;font-size:10px;font-weight:700;letter-spacing:0.08em;}
 .pending-dot{width:6px;height:6px;border-radius:50%;background:var(--gold2);animation:pulse 1.2s infinite;flex-shrink:0;}
 
 .notice{margin:14px 20px 0;padding:10px 16px;border-radius:8px;font-size:11px;font-weight:400;line-height:1.5;}
@@ -857,7 +859,6 @@ var fbDB = null;
 var fbRef = null;
 var trRef = null;  // transfer_requests Firebase ref
 var alertsRef = null; // stock_alerts Firebase ref
-var auditRef = null;  // audit_log Firebase ref (append-only, immutable)
 
 function initFirebaseAndBoot() {
   try {
@@ -865,17 +866,16 @@ function initFirebaseAndBoot() {
     var existing = firebase.apps && firebase.apps.length > 0
       ? firebase.app()
       : firebase.initializeApp({
-          apiKey:        'AIzaSyCqS-QV9UfCSF0pJ3Ft4d9MjmboV2J4ZBE',
-          authDomain:    'windmill-beans.firebaseapp.com',
-          databaseURL:   'https://windmill-beans-default-rtdb.firebaseio.com/',
-          projectId:     'windmill-beans',
-          storageBucket: 'windmill-beans.appspot.com'
+          apiKey:        'AIzaSyBIaoZ156waTEWyfXQMtMR7PfqY1831cKA',
+          authDomain:    'beans-live-updates.firebaseapp.com',
+          databaseURL:   'https://beans-live-updates-default-rtdb.firebaseio.com/',
+          projectId:     'beans-live-updates',
+          storageBucket: 'beans-live-updates.appspot.com'
         });
     fbDB      = firebase.database(existing);
     fbRef     = fbDB.ref('windmill-stock');
     trRef     = fbDB.ref('transfer_requests');
     alertsRef = fbDB.ref('stock_alerts');
-    auditRef  = fbDB.ref('audit_log');
     bootApp();
   } catch(e) {
     console.error('Firebase init failed:', e);
@@ -912,7 +912,6 @@ document.getElementById('setupConnectBtn').onclick = function() {
     fbRef     = fbDB.ref('windmill-stock');
     trRef     = fbDB.ref('transfer_requests');
     alertsRef = fbDB.ref('stock_alerts');
-    auditRef  = fbDB.ref('audit_log');
 
     // Test connection with a quick read
     fbRef.child('_ping').set(Date.now()).then(function() {
@@ -1095,41 +1094,39 @@ function showConfirm(title, msg, onOk) {
   S.confirmModal = { title: title, msg: msg, onOk: onOk };
   render();
 }
-function getStatus(bal, thr) {
-  var b = Number(bal) || 0;
-  var t = Number(thr) || 0;
-  /* threshold of 0 = "don't monitor this item" — never flag as OUT/LOW. */
-  if (t <= 0) return 'OK';
-  /* b <= 0 catches null/undefined/negative balances as OUT */
-  return b <= 0 ? 'OUT' : b < t ? 'LOW' : 'OK';
-}
+function getStatus(bal, thr) { return bal === 0 ? 'OUT' : bal < thr ? 'LOW' : 'OK'; }
 
 /* Severity tier — classifies how serious a low-stock event is.
    CRITICAL: balance is 0 (OUT) OR below criticalThreshold * min
    WARNING:  balance < min but above critical band
    OK:       at or above min                                       */
 function getSeverity(bal, thr) {
-  var b = Number(bal) || 0;
-  var t = Number(thr) || 0;
-  if (b <= 0) return 'CRITICAL';
-  /* Use explicit number check so an explicit 0 setting doesn't fall back to 0.5 */
-  var ct = (S.alertPrefs && typeof S.alertPrefs.criticalThreshold === 'number')
-    ? S.alertPrefs.criticalThreshold : 0.5;
-  var critBand = t * ct;
-  if (b <= critBand) return 'CRITICAL';
-  if (b < t) return 'WARNING';
+  if (bal === 0) return 'CRITICAL';
+  var critBand = thr * (S.alertPrefs && S.alertPrefs.criticalThreshold || 0.5);
+  if (bal <= critBand) return 'CRITICAL';
+  if (bal < thr) return 'WARNING';
   return 'OK';
 }
 
-/* Estimate days until stock-out based on the same avgDailyUsage formula
-   that drives daysOfStock() and the provisioning suggestions, so the
-   Alerts popup and the Provisioning view never disagree. */
+/* Estimate days until stock-out based on average daily outflow over last 14 days */
 function estimateDaysLeft(itemId, currentBal) {
-  var bal = Number(currentBal) || 0;
-  if (bal <= 0) return 0;
-  var avgDaily = avgDailyUsage(itemId);
+  if (currentBal <= 0) return 0;
+  var cutoff = Date.now() - 14*24*60*60*1000;
+  var totalOut = 0, daysWithOut = 0, dayMap = {};
+  S.history.forEach(function(e){
+    if (Number(e.itemId) !== Number(itemId)) return;
+    if (e.type !== 'OUT' && e.type !== 'WASTE') return;
+    var ts = new Date(e.ts).getTime();
+    if (ts < cutoff) return;
+    var dKey = new Date(e.ts).toDateString();
+    if (!dayMap[dKey]) { dayMap[dKey] = 0; daysWithOut++; }
+    dayMap[dKey] += Number(e.qty)||0;
+    totalOut += Number(e.qty)||0;
+  });
+  if (totalOut === 0 || daysWithOut === 0) return null;
+  var avgDaily = totalOut / Math.max(daysWithOut, 7);  // smooth over min 7 days
   if (avgDaily <= 0) return null;
-  return Math.max(0, Math.round(bal / avgDaily));
+  return Math.max(0, Math.round(currentBal / avgDaily));
 }
 
 var SM = {
@@ -1138,23 +1135,6 @@ var SM = {
   OUT: {lbl:'OUT',      cls:'badge-out', color:'var(--red)',    bar:'var(--red)'}
 };
 function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-/* Round any number to max 2 decimal places, strip trailing zeros */
-function r2(n) { return Math.round((Number(n)||0) * 100) / 100; }
-/* Generate a collision-free ID: ms timestamp + random suffix.
-   Date.now() alone can collide if two calls happen in the same millisecond
-   (rapid logging, ERP auto-accept, multi-device). Firebase keys things by id,
-   so a collision silently overwrites the prior entry. */
-function uniqueId() {
-  return Date.now() + '_' + Math.random().toString(36).slice(2, 8);
-}
-/* Direction of a movement entry for display purposes.
-   Returns 'IN' (stock went up) or 'OUT' (stock went down). ADJ is signed:
-   positive → IN-like, negative → OUT-like. */
-function movDir(e) {
-  if (e.type === 'IN') return 'IN';
-  if (e.type === 'ADJ') return (Number(e.qty)||0) >= 0 ? 'IN' : 'OUT';
-  return 'OUT'; /* OUT, WASTE */
-}
 function todayStr() { return new Date().toDateString(); }
 function fmtTime(d) { return d ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'; }
 function fmtDate(d) { return d ? d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'; }
@@ -1213,16 +1193,11 @@ function filteredMovements() {
   return S.history.filter(function(e){
     var ts = new Date(e.ts).getTime();
     if (cutoff && ts < cutoff) return false;
-    if (typeF !== 'All') {
-      /* OUT bucket includes WASTE and negative ADJ; IN bucket includes positive ADJ */
-      var q = Number(e.qty)||0;
-      if (typeF === 'OUT') {
-        if (!(e.type === 'OUT' || e.type === 'WASTE' || (e.type === 'ADJ' && q < 0))) return false;
-      } else if (typeF === 'IN') {
-        if (!(e.type === 'IN' || (e.type === 'ADJ' && q > 0))) return false;
-      } else if (e.type !== typeF) {
-        return false;
-      }
+    if (typeF !== 'All' && e.type !== typeF) {
+      // 'OUT' filter should also include WASTE/ADJ-out
+      if (typeF === 'OUT' && (e.type==='WASTE')) { /* keep */ }
+      else if (typeF === 'IN' && e.type === 'IN') { /* keep */ }
+      else return false;
     }
     if (search) {
       var hay = (e.itemName||'') + ' ' + (e.note||'') + ' ' + (e.type||'');
@@ -1242,13 +1217,7 @@ function groupByDay(movs) {
     groups[key].items.push(e);
     var q = Number(e.qty)||0;
     if (e.type === 'IN') groups[key].totalIn += q;
-    else if (e.type === 'ADJ') {
-      /* ADJ is signed: positive = stock went up (counts as IN-like),
-         negative = stock went down (counts as OUT-like) */
-      if (q >= 0) groups[key].totalIn += q;
-      else groups[key].totalOut += Math.abs(q);
-    }
-    else groups[key].totalOut += q; /* OUT, WASTE always reduce stock */
+    else groups[key].totalOut += q;
   });
   // Return sorted desc by date
   return Object.values(groups).sort(function(a,b){ return b.date.getTime() - a.date.getTime(); });
@@ -1318,22 +1287,14 @@ function fireDesktopNotif(title, body) {
   } catch(e) {}
 }
 function todayMoves(itemId, type) {
-  var todayStart = new Date(); todayStart.setHours(0,0,0,0);
-  var todayMs = todayStart.getTime();
+  var tod = todayStr();
   return S.history.filter(function(e) {
+    /* Use == not === and Number() to handle Firebase string/number coercion */
     var itemMatch = !itemId || Number(e.itemId) === Number(itemId);
-    var dateMatch = new Date(e.ts).getTime() >= todayMs;
-    if (!itemMatch || !dateMatch) return false;
-    if (!type) return true;
-    /* ADJ is signed: positive ADJ counts as IN, negative ADJ counts as OUT */
-    var q = Number(e.qty) || 0;
-    if (type === 'IN') return e.type === 'IN' || (e.type === 'ADJ' && q > 0);
-    if (type === 'OUT') return e.type === 'OUT' || e.type === 'WASTE' || (e.type === 'ADJ' && q < 0);
-    return e.type === type;
-  }).reduce(function(s, e) {
-    /* Always sum the absolute value — caller wants the magnitude in this bucket */
-    return s + Math.abs(Number(e.qty) || 0);
-  }, 0);
+    var typeMatch = !type || e.type === type;
+    var dateMatch = new Date(e.ts).toDateString() === tod;
+    return dateMatch && itemMatch && typeMatch;
+  }).reduce(function(s, e) { return s + Number(e.qty); }, 0);
 }
 function showToast(msg, dur) {
   if(S.toastTimer) clearTimeout(S.toastTimer);
@@ -1383,12 +1344,8 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   });
   var runningBal = currentBal;
   afterEntries.forEach(function(e){
-    /* Reverse-walk: undo each entry's effect on the balance.
-       IN added → subtract. OUT/WASTE subtracted → add back.
-       ADJ is signed (positive = increase) → subtract to reverse. */
     if(e.type==='IN') runningBal -= Number(e.qty);
-    else if(e.type==='ADJ') runningBal -= Number(e.qty);
-    else runningBal += Number(e.qty); /* OUT, WASTE */
+    else runningBal += Number(e.qty);
   });
   // Also subtract entries within range that happened after first day
   var firstDayStr = days[0];
@@ -1396,30 +1353,25 @@ function buildDailyLedger(itemId, fromDate, toDate) {
   // Build rows with carry-forward
   var rows = [];
   var open = runningBal;
-  // Compute open of first day = runningBal minus net effect of in-range days
+  // Walk from first day back: subtract this day's net to get opening
+  // Actually: compute open of first day = runningBal minus all in-range-days net
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  /* ADJ now signed: positive ADJ adds to balance, so subtract to reverse */
-  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
+  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
 
   open = periodOpenBal;
   days.forEach(function(dk){
     var r = dayMap[dk];
-    /* ADJ is signed — add it directly. r2() prevents float drift over long periods. */
-    var close = r2(open + r.in - r.out - r.waste + r.adj);
-    rows.push({ date:dk, open:r2(open), in:r2(r.in), out:r2(r.out), waste:r2(r.waste), adj:r2(r.adj), close:close });
+    var close = open + r.in - r.out - r.waste - r.adj;
+    rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
     open = close;
   });
   return rows;
 }
 
-/* Returns average daily OUT (kg/day) for an item over the last 30 days.
-   Smart-windowed: divides by min(30, max(7, days_since_first_entry)) so a recently
-   added item with 6kg out in 3 days shows ~0.86 kg/day instead of 0.2 kg/day.
-   The min-7 floor smooths spikes; the 30-day cap prevents stale ancient data. */
+/* Returns average daily OUT (kg/day) for an item over the last 30 days */
 function avgDailyUsage(itemId) {
-  var now = Date.now();
-  var cutoff = now - 30 * 24 * 60 * 60 * 1000;
+  var cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
   var entries = S.history.filter(function(e){
     return Number(e.itemId) === Number(itemId) &&
            (e.type === 'OUT' || e.type === 'WASTE') &&
@@ -1427,16 +1379,11 @@ function avgDailyUsage(itemId) {
   });
   if(!entries.length) return 0;
   var totalOut = entries.reduce(function(s,e){ return s + Number(e.qty); }, 0);
-  // Find the timestamp of the oldest qualifying entry to know the actual window length.
-  var oldestTs = entries.reduce(function(m,e){
-    var t = new Date(e.ts).getTime();
-    return t < m ? t : m;
-  }, now);
-  var ageDays = Math.max(1, Math.ceil((now - oldestTs) / (24*60*60*1000)));
-  // Smooth the divisor: at least 7 days (avoid spike-driven over-estimates),
-  // at most 30 (the window we're sampling).
-  var windowDays = Math.min(30, Math.max(7, ageDays));
-  return Math.round((totalOut / windowDays) * 10) / 10;
+  // count distinct days with activity
+  var days = {};
+  entries.forEach(function(e){ days[new Date(e.ts).toDateString()] = 1; });
+  var activeDays = Object.keys(days).length;
+  return activeDays ? Math.round((totalOut / activeDays) * 10) / 10 : 0;
 }
 
 function defaultDateRange() {
@@ -1448,16 +1395,11 @@ function defaultDateRange() {
 
 /* Category-wise ledger: aggregates multiple items */
 function buildCategoryLedger(itemIds, fromDate, toDate) {
-  /* Normalize once with a Set of numbers so string-vs-number id mismatches
-     from Firebase don't cause entries to slip through inconsistently. */
-  var idSet = {};
-  (itemIds||[]).forEach(function(id){ idSet[String(Number(id))] = 1; });
-  function isMatch(eid){ return idSet[String(Number(eid))] === 1; }
-
   // Build combined daily ledger across multiple item IDs
   var entries = S.history.filter(function(e){
     var d = new Date(e.ts);
-    return isMatch(e.itemId) && d >= fromDate && d <= toDate;
+    var match = itemIds.indexOf(Number(e.itemId)) >= 0 || itemIds.indexOf(String(e.itemId)) >= 0;
+    return match && d >= fromDate && d <= toDate;
   }).slice().sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
 
   if(!entries.length) return [];
@@ -1472,29 +1414,22 @@ function buildCategoryLedger(itemIds, fromDate, toDate) {
     else if(e.type==='ADJ') dayMap[key].adj += Number(e.qty);
   });
   var days = Object.keys(dayMap).sort();
-  var catBalance = S.items.filter(function(i){ return isMatch(i.id); })
-    .reduce(function(s,i){ return s+Number(i.balance); },0);
+  var catBalance = S.items.filter(function(i){ return itemIds.indexOf(i.id)>=0||itemIds.indexOf(Number(i.id))>=0; })
+    .reduce(function(s,i){ return s+i.balance; },0);
   var afterEntries = S.history.filter(function(e){
     var d = new Date(e.ts);
-    return isMatch(e.itemId) && d > toDate;
+    return (itemIds.indexOf(Number(e.itemId))>=0) && d > toDate;
   });
   var runningBal = catBalance;
-  afterEntries.forEach(function(e){
-    /* Reverse-walk: undo each entry. ADJ is signed → subtract to reverse. */
-    if(e.type==='IN') runningBal -= Number(e.qty);
-    else if(e.type==='ADJ') runningBal -= Number(e.qty);
-    else runningBal += Number(e.qty); /* OUT, WASTE */
-  });
+  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
   var totalInRange = {in:0,out:0,waste:0,adj:0};
   days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  /* ADJ now signed: subtract to reverse */
-  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste - totalInRange.adj;
+  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
   var rows = [];
   days.forEach(function(dk){
     var r = dayMap[dk];
-    /* ADJ signed — add directly. r2() prevents drift over long periods. */
-    var close = r2(open + r.in - r.out - r.waste + r.adj);
-    rows.push({ date:dk, open:r2(open), in:r2(r.in), out:r2(r.out), waste:r2(r.waste), adj:r2(r.adj), close:close });
+    var close = open + r.in - r.out - r.waste - r.adj;
+    rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
     open = close;
   });
   return rows;
@@ -1523,9 +1458,9 @@ function buildSnapshot(by) {
   return {
     ts: new Date().toISOString(),
     by: by || 'auto',
-    totals: { totalKg: r2(totalKg), lowCount: lowCount, outCount: outCount, itemCount: S.items.length },
+    totals: { totalKg: Math.round(totalKg*10)/10, lowCount: lowCount, outCount: outCount, itemCount: S.items.length },
     items: S.items.map(function(i){
-      return { id:i.id, name:i.name, balance:r2(i.balance), unit:i.unit||'kg', threshold:Number(i.threshold), status:getStatus(i.balance,i.threshold) };
+      return { id:i.id, name:i.name, balance:Number(i.balance), unit:i.unit||'kg', threshold:Number(i.threshold), status:getStatus(i.balance,i.threshold) };
     })
   };
 }
@@ -1563,7 +1498,7 @@ function snapshotDelta(curKey, prevKey) {
   if(!cur) return null;
   if(!prev) return { totalKg: 0, lowCount: 0, outCount: 0, isFirst: true };
   return {
-    totalKg: r2((cur.totals.totalKg - prev.totals.totalKg)),
+    totalKg: Math.round((cur.totals.totalKg - prev.totals.totalKg)*10)/10,
     lowCount: cur.totals.lowCount - prev.totals.lowCount,
     outCount: cur.totals.outCount - prev.totals.outCount,
     isFirst: false
@@ -1590,7 +1525,7 @@ function usageTopMovers(days, limit) {
   });
   var arr = Object.keys(totals).map(function(k){
     var item = S.items.find(function(i){ return String(i.id)===k; });
-    return { id:k, name: item?item.name:'(deleted item)', qty: r2(totals[k]), unit: item?item.unit:'kg' };
+    return { id:k, name: item?item.name:'(deleted item)', qty: Math.round(totals[k]*10)/10, unit: item?item.unit:'kg' };
   }).sort(function(a,b){ return b.qty - a.qty; });
   return arr.slice(0, limit||3);
 }
@@ -1600,25 +1535,6 @@ function daysOfStock(item) {
   if(avg <= 0) return null;
   return Math.floor(item.balance / avg);
 }
-/* Single source of truth for "how much to order" — used by the provisioning
-   total card, per-row suggestion column, AND the Copy Order List button so all
-   three numbers always agree.
-
-   Logic:
-   • If we have usage data: cover the deficit + 14 days of usage.
-   • If no usage data: fall back to (deficit + threshold), which gives a safe
-     buffer above the minimum.
-   • Either way, never order less than (threshold * 2) so a freshly-empty item
-     gets enough to last past the next dip. */
-function provisionSuggestion(item) {
-  var deficit = Math.max(0, r2(item.threshold - item.balance));
-  var daily   = avgDailyUsage(item.id);
-  var cover   = daily > 0
-    ? Math.ceil(deficit + daily * 14)
-    : Math.ceil(deficit + item.threshold);
-  return Math.max(item.threshold * 2, cover);
-}
-
 /* Items at risk: low/out OR <7 days of stock — sorted by urgency */
 function usageAtRisk(limit) {
   var arr = S.items.map(function(i){
@@ -1688,14 +1604,14 @@ function usageByOrigin() {
     return {
       origin: g.origin,
       itemCount: g.items.length,
-      balance:  r2(g.balance),
+      balance:  Math.round(g.balance*10)/10,
       lowCount: g.lowCount,
       outCount: g.outCount,
-      outToday: r2(g.outToday),
-      out7:     r2(g.out7),
-      out30:    r2(g.out30),
+      outToday: Math.round(g.outToday*10)/10,
+      out7:     Math.round(g.out7*10)/10,
+      out30:    Math.round(g.out30*10)/10,
       topItemName: topItem ? topItem.name : null,
-      topItemQty:  r2(topQty),
+      topItemQty:  Math.round(topQty*10)/10,
       unit: g.items[0] ? g.items[0].unit : 'kg'
     };
   }).sort(function(a,b){
@@ -1743,7 +1659,7 @@ function resetActFilter() {
 function postTeamUpdate(text, author) {
   text = String(text||'').trim();
   if(!text) return;
-  var id = uniqueId();
+  var id = Date.now();
   var entry = {
     id: id,
     ts: new Date().toISOString(),
@@ -1818,17 +1734,22 @@ function importFullBackup(file) {
       'Replace ALL Data?',
       '⚠ This will OVERWRITE all current items, history, comments, snapshots and team updates with the contents of the backup file.\n\n'+summary+'\n\nThe team password will not be changed. This cannot be undone.',
       function() {
+        /* Convert items array to keyed object {id: item} before writing.
+           Writing a raw array creates numeric keys in Firebase ("0","1","2…").
+           If any saveItem() call also exists for those items, Firebase ends up
+           with both numeric and timestamp keys — causing duplicate cards.
+           Keyed object is consistent with how saveAll() and saveItem() write. */
+        var importItemsObj = {};
+        (raw.items || []).forEach(function(it){ if(it && it.id) importItemsObj[String(it.id)] = it; });
         var update = {
-          items: raw.items,
+          items: importItemsObj,
           history: raw.history || [],
           comments: raw.comments || {},
           categories: raw.categories || S.categories,
           snapshots: raw.snapshots || {},
           teamUpdates: raw.teamUpdates || {}
         };
-        _ignoreRemote = true;
         fbRef.update(update, function(err) {
-          setTimeout(function(){ _ignoreRemote = false; }, 800);
           if(err) { showToast('⚠ Import failed: '+err.message); }
           else {
             S.items = update.items;
@@ -1837,13 +1758,8 @@ function importFullBackup(file) {
             S.categories = update.categories;
             S.snapshots = update.snapshots;
             S.teamUpdates = update.teamUpdates;
-            logAudit('import_backup', {
-              source: 'file',
-              itemsImported: update.items.length,
-              historyImported: update.history.length,
-              snapshotsImported: Object.keys(update.snapshots||{}).length,
-              meta: raw._meta || null
-            });
+            // Mark all items as pending so reconciliation works smoothly
+            (Array.isArray(S.items) ? S.items : []).forEach(_markPendingItem);
             showToast('✅ Backup restored successfully.');
           }
           S.importBusy = false;
@@ -1858,401 +1774,154 @@ function importFullBackup(file) {
 }
 
 /* ══════════════════════════════════════════════════════
-   AUDIT LOG MODULE  (immutable, append-only)
-   ─────────────────────────────────────────────────────
-   Every state-changing action writes a tamper-evident
-   entry to /audit_log. Each entry includes:
-     - ts        : server timestamp
-     - sessionId : per-tab UUID (best-effort identity)
-     - actor     : whoever the user identified themselves
-                   as on the team panel (best-effort)
-     - action    : one of 'movement','add_item','delete_item',
-                   'delete_history','import_backup','password_change',
-                   'snapshot','transfer_approve','transfer_reject',
-                   'bulk_delete_day'
-     - payload   : action-specific details (qty, before/after, ids…)
-     - prevHash  : SHA-256 of the previous entry's content
-                   → forms a hash chain. Tampering with any old
-                     entry would break every hash after it.
-     - hash      : SHA-256 of (ts + actor + action + payload + prevHash)
-
-   IMPORTANT — for the log to be TRULY immutable, deploy
-   the rules in firebase-rules.json. Without those rules
-   anyone with the DB URL can still wipe the log.
+   FIREBASE READ/WRITE
+   KEY FIX: use fbRef.update() (atomic) instead of two
+   separate .set() calls. Two separate writes caused a
+   race: the .on() listener fired after the first write
+   and read stale history — wiping In/Out Today to 0.
+   Also: _ignoreRemote flag blocks our own echo-backs.
 ══════════════════════════════════════════════════════ */
-var AUDIT_SESSION_ID = (function(){
-  try {
-    var s = sessionStorage.getItem('wc-audit-session');
-    if (s) return s;
-    s = 'sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,10);
-    sessionStorage.setItem('wc-audit-session', s);
-    return s;
-  } catch(e) {
-    return 'sess_' + Date.now().toString(36);
-  }
-})();
+/* ── Live-sync conflict prevention ─────────────────────────────
+   PROBLEM we are solving:
+   Firebase fires .on('value') for EVERY child write. Our balance
+   write (items/<id>) and our history write (history/<id>) are two
+   separate operations; Firebase doesn't guarantee ordering. The
+   listener can fire AFTER the history write but BEFORE the items
+   write lands on the server, returning data where items still
+   shows the OLD balance. If we naively `S.items = items`, we
+   revert our own just-applied edit. Next user action then computes
+   off the reverted balance — e.g. 0 +100 -10 +25 displays as 125
+   because the -10 got reverted before the +25 was applied.
 
-var _lastAuditHash = null;   // cached locally for chain
-var _auditQueueing = false;  // mutex so chained writes stay ordered
-var _auditQueue = [];
+   FIX:
+   1. Each device has a unique _clientId.
+   2. When we write an item locally, we record its expected balance
+      in _pendingItemBal[itemId]. We keep this entry until we see
+      an echo where the SAME balance comes back from server.
+   3. In applyRemoteData, for any item that has a pending write,
+      we KEEP the local balance (don't trust the remote yet).
+   4. Once the server's balance for that item matches our pending
+      value, we clear the pending mark — future remote updates for
+      that item are trusted again. */
+var _clientId       = 'c_' + Math.random().toString(36).slice(2,10) + '_' + Date.now();
+var _pendingItemBal = {}; // itemId -> { bal: expectedBalance, ts: msEnqueued }
+var _deletedItemIds = {}; // itemId -> ts — tracks locally-deleted items so Firebase echoes don't resurrect them
 
-function _sha256Hex(str) {
-  // Async SHA-256 via SubtleCrypto (available on all modern browsers + https)
-  // Fallback: a tiny non-crypto digest. Good enough for tamper-evidence
-  // when paired with server rules; better than nothing on file://.
-  if (window.crypto && window.crypto.subtle && window.isSecureContext) {
-    var data = new TextEncoder().encode(str);
-    return window.crypto.subtle.digest('SHA-256', data).then(function(buf){
-      var arr = Array.from(new Uint8Array(buf));
-      return arr.map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
-    });
-  }
-  // Fallback: FNV-1a-style 64-bit-ish, hex padded
-  var h1 = 0x811c9dc5, h2 = 0xc9dc5118;
-  for (var i = 0; i < str.length; i++) {
-    h1 ^= str.charCodeAt(i);
-    h1 = (h1 * 16777619) >>> 0;
-    h2 ^= str.charCodeAt(str.length - 1 - i);
-    h2 = (h2 * 16777619) >>> 0;
-  }
-  return Promise.resolve(('00000000'+h1.toString(16)).slice(-8) +
-                         ('00000000'+h2.toString(16)).slice(-8));
+function _markPendingItem(item) {
+  if(!item) return;
+  _pendingItemBal[item.id] = { bal: item.balance, ts: Date.now() };
 }
-
-function _loadCachedAuditHash() {
-  try { return localStorage.getItem('wc-last-audit-hash') || null; }
-  catch(e) { return null; }
-}
-function _saveCachedAuditHash(h) {
-  try { localStorage.setItem('wc-last-audit-hash', h); } catch(e) {}
-}
-
-function _resolveActor() {
-  // Best-effort: the team panel asks users to identify themselves
-  // when posting updates. Use that name if recently set.
-  try {
-    var n = localStorage.getItem('wc-actor-name');
-    if (n) return n;
-  } catch(e) {}
-  return 'unknown';
-}
-
-function setAuditActor(name) {
-  try { localStorage.setItem('wc-actor-name', String(name||'').slice(0,40)); } catch(e) {}
-}
-
-function logAudit(action, payload) {
-  /* Queue + drain pattern keeps the hash chain ordered even when
-     callers fire several audit writes in a row. */
-  _auditQueue.push({ action: action, payload: payload || {} });
-  if (_auditQueueing) return;
-  _auditQueueing = true;
-  _drainAuditQueue();
-}
-
-function _drainAuditQueue() {
-  if (!_auditQueue.length) { _auditQueueing = false; return; }
-  if (!auditRef) {
-    // Firebase not ready yet — drop into a deferred queue
-    setTimeout(_drainAuditQueue, 500);
-    return;
-  }
-  var job = _auditQueue.shift();
-  var prevHash = _lastAuditHash || _loadCachedAuditHash() || 'genesis';
-  var ts = new Date().toISOString();
-  var actor = _resolveActor();
-  var entry = {
-    ts: ts,
-    sessionId: AUDIT_SESSION_ID,
-    actor: actor,
-    action: job.action,
-    payload: job.payload,
-    prevHash: prevHash
-  };
-  var canonical = ts + '|' + actor + '|' + job.action + '|' +
-                  JSON.stringify(job.payload) + '|' + prevHash;
-  _sha256Hex(canonical).then(function(hash){
-    entry.hash = hash;
-    // Push under a date-bucketed path so a single day's logs cluster together
-    // and the path can be read with Firebase rules limiting query scope.
-    var dayKey = ts.slice(0,10); // YYYY-MM-DD
-    auditRef.child(dayKey).push(entry, function(err){
-      if (!err) {
-        _lastAuditHash = hash;
-        _saveCachedAuditHash(hash);
-      } else {
-        // Failed write — log to console; don't block app
-        console.warn('Audit write failed:', err.message);
-      }
-      _drainAuditQueue();
-    });
-  }).catch(function(){
-    // Hashing failed for some reason — write entry without hash
-    entry.hash = 'unhashed';
-    var dayKey = ts.slice(0,10);
-    auditRef.child(dayKey).push(entry, function(){ _drainAuditQueue(); });
+function _clearStalePending() {
+  // Safety: drop any pending entry older than 8 seconds.
+  // 8s is generous — Firebase usually echoes back in <500ms.
+  var now = Date.now();
+  Object.keys(_pendingItemBal).forEach(function(id){
+    if(now - _pendingItemBal[id].ts > 8000) delete _pendingItemBal[id];
   });
 }
-
-/* ══════════════════════════════════════════════════════
-   AUTOMATIC BACKUP MODULE
-   ─────────────────────────────────────────────────────
-   Two layers of protection (free-tier friendly — no
-   Firebase storage usage beyond your existing data):
-
-     1. Rolling localStorage backup — last 7 daily
-        snapshots kept per browser per device. Always-on,
-        survives Firebase outages, instant restore.
-
-     2. Auto-downloaded JSON file to disk — one per week
-        per browser, plus the manual "Export Backup"
-        button in Settings that you already have.
-
-   To restore from a local backup, use the dev console:
-     restoreLocalBackup('2026-05-10')   // returns the payload
-   then paste it into the Import Backup file picker.
-══════════════════════════════════════════════════════ */
-var BACKUP_LS_KEY = 'wc-local-backups';
-var BACKUP_LS_MAX = 7;
-var BACKUP_DOWNLOAD_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-function _buildBackupPayload(reason) {
-  return {
-    _meta: {
-      app: 'Windmill Cafe & Roastery',
-      reason: reason || 'auto',
-      exportedAt: new Date().toISOString(),
-      sessionId: AUDIT_SESSION_ID,
-      version: 2
-    },
-    items: S.items,
-    history: S.history,
-    comments: S.comments,
-    categories: S.categories,
-    snapshots: S.snapshots || {},
-    teamUpdates: S.teamUpdates || {}
-    // password intentionally NOT exported
-  };
-}
-
-function _writeLocalBackup() {
-  try {
-    var raw = localStorage.getItem(BACKUP_LS_KEY);
-    var arr = raw ? JSON.parse(raw) : [];
-    var todayKey = new Date().toISOString().slice(0,10);
-    // One per day max
-    arr = arr.filter(function(b){ return b.day !== todayKey; });
-    arr.unshift({
-      day: todayKey,
-      ts: new Date().toISOString(),
-      // Stripped form to fit comfortably in localStorage's ~5MB
-      payload: _buildBackupPayload('local-rolling')
-    });
-    arr = arr.slice(0, BACKUP_LS_MAX);
-    localStorage.setItem(BACKUP_LS_KEY, JSON.stringify(arr));
-    return true;
-  } catch(e) {
-    // Quota exceeded or storage disabled — fail silent
-    console.warn('Local backup failed:', e.message);
-    return false;
-  }
-}
-
-function listLocalBackups() {
-  try {
-    var raw = localStorage.getItem(BACKUP_LS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch(e) { return []; }
-}
-
-function restoreLocalBackup(day) {
-  var all = listLocalBackups();
-  var b = all.find(function(x){ return x.day === day; });
-  return b ? b.payload : null;
-}
-
-function _autoDownloadBackup() {
-  // Don't spam users — once per week per browser
-  try {
-    var lastStr = localStorage.getItem('wc-last-auto-download');
-    var last = lastStr ? Number(lastStr) : 0;
-    if (Date.now() - last < BACKUP_DOWNLOAD_INTERVAL_MS) return;
-    localStorage.setItem('wc-last-auto-download', String(Date.now()));
-  } catch(e) {}
-
-  var payload = _buildBackupPayload('auto-weekly-download');
-  var blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = 'windmill-backup-AUTO-'+new Date().toISOString().slice(0,10)+'.json';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);
-  showToast('💾 Weekly backup downloaded to your device.', 4000);
-  logAudit('auto_backup', { storedAt: 'browser-download',
-                            items: S.items.length,
-                            historyEntries: S.history.length });
-}
-
-function autoBackupTick() {
-  // Called every 5 minutes from a setInterval. Cheap when nothing's due.
-  _writeLocalBackup();
-  // Weekly download (gated internally — once per browser per week)
-  _autoDownloadBackup();
-}
-
-function startAutoBackup() {
-  // Initial run after 30s, then every 5 min.
-  setTimeout(autoBackupTick, 30 * 1000);
-  setInterval(autoBackupTick, 5 * 60 * 1000);
-}
-
-/* ══════════════════════════════════════════════════════
-   STOCK TRANSACTION MODULE  (atomic, race-free)
-   ─────────────────────────────────────────────────────
-   The previous saveAll() pattern wrote the whole items
-   array in one shot. Two clients editing different items
-   at the same moment would lose one write because each
-   had a different in-memory snapshot.
-
-   stockTransaction() uses Firebase's .transaction() on a
-   SINGLE item's balance node. Firebase guarantees:
-     - the update function is called with the LIVE value
-       from the server (not our cached state)
-     - if another client wrote between our read and write,
-       Firebase retries with the new value
-     - the new value is only committed if our function
-       returned a non-undefined value
-
-   On success we then push the history entry. If the
-   balance update is rejected (would go negative), we
-   never push the history — they stay consistent.
-══════════════════════════════════════════════════════ */
-function stockTransaction(itemId, type, qty, note, onDone) {
-  if (!fbRef) { showToast('⚠️ Not connected to Firebase yet.'); return; }
-  qty = r2(Number(qty));
-  if (!isFinite(qty)) {
-    showToast('⚠️ Invalid quantity.');
-    if (onDone) onDone(false, 'invalid_qty');
-    return;
-  }
-  var item = S.items.find(function(i){ return Number(i.id) === Number(itemId); });
-  if (!item) {
-    showToast('⚠️ Item no longer exists.');
-    if (onDone) onDone(false, 'no_item');
-    return;
-  }
-
-  var balanceRef = fbRef.child('items').child(String(_itemIndex(itemId))).child('balance');
-  var prevBalForAudit = null;
-  var newBalForAudit  = null;
-
-  balanceRef.transaction(function(currentBal){
-    /* Firebase guarantees this function sees the LIVE balance.
-       If null, Firebase is asking us what to use as the initial value
-       (treated as 0 here for safety). */
-    if (currentBal === null) currentBal = Number(item.balance) || 0;
-    var bal = r2(Number(currentBal));
-    var next;
-    if (type === 'IN')         next = r2(bal + qty);
-    else if (type === 'OUT')   next = r2(bal - qty);
-    else if (type === 'WASTE') next = r2(bal - qty);
-    else if (type === 'ADJ')   next = r2(bal + qty); // qty signed for ADJ
-    else return; // unknown type — abort
-    if (next < 0) return;     // abort: would go negative
-    prevBalForAudit = bal;
-    newBalForAudit  = next;
-    return next;
-  }, function(error, committed, snapshot){
-    if (error) {
-      showToast('⚠️ Save failed: ' + error.message);
-      if (onDone) onDone(false, 'firebase_err');
-      return;
-    }
-    if (!committed) {
-      // Either negative-balance abort, unknown type, or transaction
-      // gave up after too many retries.
-      var reason = (newBalForAudit === null)
-        ? 'Movement aborted (would go negative or invalid type).'
-        : 'Save aborted by Firebase (concurrent edit? please retry).';
-      showToast('⚠️ ' + reason);
-      logAudit('movement_aborted', {
-        itemId: itemId, itemName: item.name, type: type, qty: qty,
-        reason: reason, note: note || ''
-      });
-      if (onDone) onDone(false, 'aborted');
-      return;
-    }
-    /* Balance committed — now push the history entry to a children
-       path. We use .push() so two simultaneous history entries get
-       distinct server-assigned keys (no overwrite). */
-    var historyEntry = {
-      id: uniqueId(),
-      ts: new Date().toISOString(),
-      itemId: itemId,
-      itemName: item.name,
-      type: type,
-      qty: qty,
-      note: note || '',
-      sessionId: AUDIT_SESSION_ID,
-      actor: _resolveActor()
-    };
-    fbRef.child('history_entries').push(historyEntry, function(){
-      // Update local state to match
-      S.items = S.items.map(function(i){
-        return Number(i.id) === Number(itemId)
-          ? Object.assign({}, i, { balance: newBalForAudit })
-          : i;
-      });
-      S.history = [historyEntry].concat(S.history).slice(0, 2000);
-      logAudit('movement', {
-        itemId: itemId, itemName: item.name, type: type, qty: qty,
-        before: prevBalForAudit, after: newBalForAudit, note: note || ''
-      });
-      _writeLocalBackup(); // opportunistic local backup after every change
-      if (onDone) onDone(true, null);
-    });
-  }, /* applyLocally */ false);
-}
-
-/* Helper: find the array index of an item in S.items.
-   Firebase stores the items as a 0-indexed object, so the path
-   `items/<index>/balance` reaches the right balance node. */
-function _itemIndex(itemId) {
-  for (var i = 0; i < S.items.length; i++) {
-    if (Number(S.items[i].id) === Number(itemId)) return i;
-  }
-  return -1;
-}
-
-
-/* ══════════════════════════════════════════════════════
-   LEGACY FULL-STATE WRITE
-   ─────────────────────────────────────────────────────
-   Kept for operations that mutate STRUCTURE (add/delete
-   item, change category list, import backup) rather than
-   just balances. Stock balance changes should go through
-   stockTransaction() above to stay race-free.
-══════════════════════════════════════════════════════ */
-var _ignoreRemote = false; // blocks echo from our own saves
 
 function saveAll() {
-  _ignoreRemote = true;
-  fbRef.update({ items: S.items, history: S.history, comments: S.comments, categories: S.categories }, function(err) {
-    setTimeout(function() { _ignoreRemote = false; }, 800);
-    if (err) {
-      logAudit('save_failed', { error: err.message });
-      showToast('⚠️ Save failed: ' + err.message);
-    } else {
-      _writeLocalBackup(); // opportunistic local backup after every change
+  /* Write items as a keyed object {id: item} — NOT as an array.
+     Writing an array to Firebase creates numeric keys ("0","1","2…").
+     If saveItem() also writes under items/<timestamp-id>, Firebase ends
+     up with BOTH numeric and timestamp keys, and objToArr returns
+     duplicates. Keyed objects avoid this entirely. */
+  var itemsObj = {};
+  S.items.forEach(function(item){ itemsObj[String(item.id)] = item; });
+  fbRef.update({
+    items: itemsObj,
+    comments: S.comments,
+    categories: S.categories,
+    teamUpdates: S.teamUpdates || {},
+    snapshots: S.snapshots || {}
+  });
+  // Mark every item as pending — we just wrote them all.
+  S.items.forEach(_markPendingItem);
+}
+
+/* Surgical per-item write — writes ONLY the changed item's child path.
+   Two devices editing two different items at the same instant will not
+   clobber each other (the old saveAll pushed the whole items array,
+   so last-write-wins erased the other device's edit). */
+function saveItem(item) {
+  if(typeof fbRef === 'undefined' || !fbRef || !item) return;
+  _markPendingItem(item);
+  var update = {};
+  update['items/' + item.id] = item;
+  fbRef.update(update, function(err) {
+    /* Once Firebase confirms the write, schedule a short delayed cleanup.
+       We don't clear immediately because the .on('value') echo may still
+       be in flight; the reconciliation in applyRemoteData handles that.
+       But if no echo ever arrives (or arrives with someone else's newer
+       value), this ensures we eventually accept remote truth. */
+    if(!err) {
+      setTimeout(function(){
+        var p = _pendingItemBal[item.id];
+        // Only clear if THIS write is still the pending one (no newer write took over)
+        if(p && p.bal === item.balance) delete _pendingItemBal[item.id];
+      }, 1500);
     }
   });
 }
-function savePassword(p) {
-  fbRef.child('password').set(p);
-  logAudit('password_change', { /* never log the password itself */ at: new Date().toISOString() });
+
+/* ── Surgical history append ────────────────────────────────────
+   Writes a single history entry as its own Firebase child. This
+   is an atomic, conflict-free operation — even if two devices
+   record an IN/OUT at the same instant, BOTH entries survive,
+   because each is written to a different child key (the entry id).
+   Use this INSTEAD of including the entry in the saveAll() blob.
+
+   IMPORTANT: also writes a `serverTs` using Firebase's server
+   timestamp. The local `ts` field comes from the device clock
+   and may be wrong if the device's date/time is misconfigured.
+   `serverTs` is set by Firebase's servers and is always correct.
+   On read, the app prefers `serverTs` over `ts` for filtering
+   so Today/Week/Month always show records correctly even if a
+   device's clock is off.
+═══════════════════════════════════════════════════════════════ */
+function pushHistoryEntry(entry) {
+  if(typeof fbRef === 'undefined' || !fbRef) return;
+  // Add Firebase ServerValue.TIMESTAMP — server replaces this with its own time
+  var withServerTs = Object.assign({}, entry, {
+    serverTs: firebase.database.ServerValue.TIMESTAMP
+  });
+  fbRef.child('history').child(String(entry.id)).set(withServerTs);
 }
+function removeHistoryEntry(entryId) {
+  if(typeof fbRef === 'undefined' || !fbRef) return;
+  fbRef.child('history').child(String(entryId)).remove();
+}
+
+/* Entry-time helper: returns ms epoch using server time when available.
+   Used internally; most code reads e.ts (which is normalized at read-time
+   to reflect server time when the server has stamped it). */
+function entryTime(e) {
+  if(!e) return 0;
+  if(typeof e.serverTs === 'number' && e.serverTs > 0) return e.serverTs;
+  if(e.ts) {
+    var t = new Date(e.ts).getTime();
+    if(!isNaN(t)) return t;
+  }
+  return Number(e.id) || 0;
+}
+
+/* Normalize a history entry after reading from Firebase.
+   If the server has stamped the entry with serverTs, use that as the
+   authoritative timestamp. This makes all date filters (Today / Week /
+   Month) work correctly even if the writing device's clock is wrong. */
+function normalizeHistoryEntry(e) {
+  if(!e || typeof e !== 'object') return e;
+  if(typeof e.serverTs === 'number' && e.serverTs > 0) {
+    // Override the local-clock ts with the server's authoritative time
+    e.ts = new Date(e.serverTs).toISOString();
+  }
+  return e;
+}
+function normalizeHistory(arr) {
+  if(!Array.isArray(arr)) return arr;
+  return arr.map(normalizeHistoryEntry);
+}
+function savePassword(p) { fbRef.child('password').set(p); }
 
 /* ══════════════════════════════════════════════════════
    STOCK ALERT SYSTEM
@@ -2326,20 +1995,20 @@ function scanAndSendAlerts() {
       sendStockAlert({
         type: 'auto_out', status: 'OUT',
         itemId: item.id, itemName: item.name,
-        balance: r2(item.balance), threshold: item.threshold, unit: item.unit,
+        balance: item.balance, threshold: item.threshold, unit: item.unit,
         message: '🚨 OUT OF STOCK: ' + item.name +
                  ' has reached 0 ' + item.unit + '. Please roast more urgently.'
       });
-      newAlerts.push({ status:'OUT', name:item.name, balance:r2(item.balance), unit:item.unit, threshold:item.threshold });
+      newAlerts.push({ status:'OUT', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
     } else {
       sendStockAlert({
         type: 'auto_low', status: 'LOW',
         itemId: item.id, itemName: item.name,
-        balance: r2(item.balance), threshold: item.threshold, unit: item.unit,
-        message: '⚠️ LOW STOCK: ' + item.name + ' is at ' + r2(item.balance) +
+        balance: item.balance, threshold: item.threshold, unit: item.unit,
+        message: '⚠️ LOW STOCK: ' + item.name + ' is at ' + item.balance +
                  ' ' + item.unit + ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
       });
-      newAlerts.push({ status:'LOW', name:item.name, balance:r2(item.balance), unit:item.unit, threshold:item.threshold });
+      newAlerts.push({ status:'LOW', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
     }
     _saveAlertedItem(item.id, status);
   });
@@ -2375,30 +2044,65 @@ function sendManualAlert() {
 }
 
 function applyRemoteData(data, flash) {
-  /* Skip echo-backs from our own writes */
-  if(_ignoreRemote) return;
+  _clearStalePending();
 
   /* Called when Firebase pushes new data */
   var items      = data.items      ? objToArr(data.items)   : null;
-  var history    = data.history    ? objToArr(data.history) : [];
+  var history    = data.history    ? normalizeHistory(objToArr(data.history)) : [];
   var password   = data.password   || 'windmill2024';
   var comments   = data.comments   || {};
   var categories = data.categories ? (Array.isArray(data.categories) ? data.categories : Object.values(data.categories)) : null;
   var snapshots  = data.snapshots  || {};
   var teamUpdates= data.teamUpdates|| {};
 
+  /* Sort history newest-first. Firebase children come back in key order,
+     not insertion order, so we sort by timestamp to keep the UI consistent. */
+  history.sort(function(a,b){
+    var ta = a && a.ts ? new Date(a.ts).getTime() : 0;
+    var tb = b && b.ts ? new Date(b.ts).getTime() : 0;
+    return tb - ta;
+  });
+
   if(items) {
+    /* ── Per-item reconciliation ─────────────────────────────
+       For each remote item, check if we have a pending local write.
+       - If the remote balance MATCHES our pending value → server has
+         confirmed our write. Clear the pending mark; trust remote.
+       - If the remote balance DOES NOT match our pending value → our
+         write hasn't landed on the server yet (or this echo is from
+         a different child write that fired first). Keep local balance
+         to prevent reverting our just-applied edit.
+       - No pending mark → trust remote (it's a real external update). */
+    /* Strip any items that this device has already deleted.
+       Firebase echoes the full snapshot including the just-removed key
+       until the .remove() propagates — this guard prevents resurrection. */
+    var filteredRemote = items.filter(function(remoteItem) {
+      return !_deletedItemIds[String(remoteItem.id)];
+    });
+    var reconciled = filteredRemote.map(function(remoteItem) {
+      var pending = _pendingItemBal[remoteItem.id];
+      if(!pending) return remoteItem; // no local write in flight, trust remote
+      if(remoteItem.balance === pending.bal) {
+        // Server has caught up — our write is confirmed
+        delete _pendingItemBal[remoteItem.id];
+        return remoteItem;
+      }
+      // Our write hasn't landed yet — keep local copy of this item
+      var local = S.items.find(function(x){ return x.id === remoteItem.id; });
+      return local ? local : remoteItem;
+    });
+
     if(flash && S.items.length) {
-      var changed = items.filter(function(n) {
+      var changed = reconciled.filter(function(n) {
         var o = S.items.find(function(x){ return x.id === n.id; });
         return o && o.balance !== n.balance;
       });
       if(changed.length) {
         S.flashId = changed[0].id;
-        setTimeout(function(){ S.flashId = null; if(!isBusy()) render(); }, 1000);
+        setTimeout(function(){ S.flashId = null; if(!isBusy()) scheduleRender(); }, 1000);
       }
     }
-    S.items = items;
+    S.items = reconciled;
     // Auto-scan for LOW/OUT items every time remote data arrives
     setTimeout(scanAndSendAlerts, 400);
   }
@@ -2411,20 +2115,76 @@ function applyRemoteData(data, flash) {
   S.lastSync = new Date();
   S.syncing  = false;
 
-  if(isBusy()) {
-    // User is editing — flag pending update but DON'T re-render
+  /* Always re-render on remote data so users see live updates immediately.
+     If the user is typing in an input, snapshot focus state and restore it
+     after the render so they don't lose their cursor or text. Modals (log
+     entry, confirm dialogs, login screens) still block re-render because
+     re-rendering would tear them down mid-action. */
+  var modalOpen = S.showLogin || S.showSettingsLogin || S.logModal !== null
+                  || S.confirmModal !== null || S.showAddItem || S.showCPwd;
+  if(modalOpen) {
     S.pendingUpdate = true;
     showPendingBanner(true);
   } else {
     S.pendingUpdate = false;
-    render();
+    showPendingBanner(false);
+    // Use scheduleRender (rAF-debounced) so that rapid-fire Firebase
+    // echoes (items write + history write arriving milliseconds apart)
+    // collapse into a single DOM update and never produce duplicate cards.
+    if (_renderScheduled) return; // already queued for this frame
+    _renderScheduled = true;
+    requestAnimationFrame(function() {
+      _renderScheduled = false;
+      renderWithFocus();
+    });
+  }
+}
+
+/* Capture which input the user is in (if any), then render, then restore
+   focus + value + cursor position. This keeps live syncing from
+   interrupting a user mid-typing. */
+function renderWithFocus() {
+  var a = document.activeElement;
+  var preserve = null;
+  if(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')) {
+    preserve = {
+      id:    a.id || null,
+      value: a.value,
+      start: typeof a.selectionStart === 'number' ? a.selectionStart : null,
+      end:   typeof a.selectionEnd   === 'number' ? a.selectionEnd   : null
+    };
+  }
+  render();
+  if(preserve && preserve.id) {
+    var el = document.getElementById(preserve.id);
+    if(el) {
+      try {
+        // Restore the in-flight value the user was typing
+        if(preserve.value !== undefined && el.value !== preserve.value) el.value = preserve.value;
+        el.focus();
+        if(preserve.start !== null && typeof el.setSelectionRange === 'function') {
+          try { el.setSelectionRange(preserve.start, preserve.end); } catch(e) {}
+        }
+      } catch(e) {}
+    }
   }
 }
 
 // Firebase stores objects with auto keys; convert back to array
 function objToArr(obj) {
-  if(Array.isArray(obj)) return obj;
-  return Object.keys(obj).map(function(k){ return obj[k]; });
+  var seen = {};
+  var result = [];
+  // Handle both arrays (written by saveAll) and Firebase objects (mixed numeric + timestamp keys)
+  var values = Array.isArray(obj) ? obj : Object.keys(obj).map(function(k){ return obj[k]; });
+  values.forEach(function(item) {
+    if(!item || typeof item !== 'object') return;
+    // Deduplicate by item.id — prevents Firebase key collision (array index + timestamp id)
+    var key = String(item.id !== undefined ? item.id : Math.random());
+    if(seen[key]) return;
+    seen[key] = true;
+    result.push(item);
+  });
+  return result;
 }
 
 /* ══════════════════════════════════════════════════════
@@ -2442,7 +2202,7 @@ document.addEventListener('blur', function() {
     if(S.pendingUpdate && !isBusy()) {
       S.pendingUpdate = false;
       showPendingBanner(false);
-      render();
+      scheduleRender();
     }
   }, 150);
 }, true);
@@ -2457,17 +2217,14 @@ document.addEventListener('blur', function() {
 function fuzzyMatchItem(beanName) {
   if(!beanName) return null;
   var lower = beanName.toLowerCase().trim();
-  if(!lower) return null;
   // 1. Exact (case-insensitive)
   var exact = S.items.find(function(i){ return i.name.toLowerCase() === lower; });
   if(exact) return { item: exact, confidence: 'exact' };
-  // 2. One is substring of the other — require at least 4 chars on the shorter side
-  //    so a stub like "AA" doesn't match "Kenya AA" or every item containing the letter "a".
-  var sub = (lower.length >= 4) ? S.items.find(function(i){
+  // 2. One is substring of the other
+  var sub = S.items.find(function(i){
     var il = i.name.toLowerCase();
-    if (il.length < 4) return false;
     return il.includes(lower) || lower.includes(il);
-  }) : null;
+  });
   if(sub) return { item: sub, confidence: 'partial' };
   // 3. Word-overlap score ≥ 0.5
   var bWords = lower.split(/\s+/).filter(Boolean);
@@ -2503,13 +2260,11 @@ function acceptIncoming(reqKey) {
 
   var item = S.items.find(function(i){ return i.id === targetItemId; });
   if(!item){ showToast('⚠️ Selected item not found.'); return; }
-  var weight = r2(Number(req.weight) || 0);
+  var weight = Number(req.weight) || 0;
   if(weight <= 0){ showToast('⚠️ Invalid weight in transfer request.'); return; }
 
   // Log as IN movement
-  // FIX: Don't esc() the note here — it's stored as plain text and gets escaped at render time.
-  // Calling esc() before storage would persist '&amp;', '&lt;' etc. in the database.
-  logMovement(targetItemId, 'IN', weight, '📦 Roastery Transfer — ' + (req.bean_name || ''));
+  logMovement(targetItemId, 'IN', weight, '📦 Roastery Transfer — ' + esc(req.bean_name));
 
   // Mark transfer request as completed in Firebase
   if(trRef) {
@@ -2520,14 +2275,6 @@ function acceptIncoming(reqKey) {
       accepted_item_name: item.name
     });
   }
-  logAudit('transfer_approve', {
-    reqKey: reqKey,
-    beanName: req.bean_name || '',
-    weight: weight,
-    unit: req.unit || 'kg',
-    acceptedItemId: targetItemId,
-    acceptedItemName: item.name
-  });
 
   // Clean up conflict state
   delete S.incomingConflict[reqKey];
@@ -2547,12 +2294,6 @@ function rejectIncoming(reqKey) {
         message: '🚫 Transfer rejected: ' + req.bean_name + ' (' + req.weight + ' ' + (req.unit||'kg') + '). Please contact the store for details.'
       });
     }
-    logAudit('transfer_reject', {
-      reqKey: reqKey,
-      beanName: req.bean_name || '',
-      weight: req.weight,
-      unit: req.unit || 'kg'
-    });
     showToast('🚫 Transfer request rejected. Roastery notified.');
   });
 }
@@ -2607,156 +2348,92 @@ function doSettingsLogin() {
 
 function logMovement(itemId, type, qty, note) {
   var item = S.items.find(function(i){ return i.id === itemId; });
-  if(!item) { showToast('⚠️ Item no longer exists.'); return; }
+  if(!item) return;
 
-  qty = r2(Number(qty));
-  if (!isFinite(qty)) { showToast('⚠️ Invalid quantity.'); return; }
+  var prevBal = item.balance; // capture BEFORE the change
 
-  /* Pre-flight check on local state for fast UX feedback. The REAL
-     authoritative check happens inside the Firebase transaction
-     (which sees the live server-side balance). */
-  var prevBal = r2(item.balance);
-  var newBalLocal;
-  if (type === 'IN')         newBalLocal = r2(prevBal + qty);
-  else if (type === 'OUT')   newBalLocal = r2(prevBal - qty);
-  else if (type === 'WASTE') newBalLocal = r2(prevBal - qty);
-  else if (type === 'ADJ')   newBalLocal = r2(prevBal + qty);
-  else { showToast('⚠️ Unknown movement type: '+type); return; }
-  if (newBalLocal < 0) {
-    showToast('⚠️ Cannot save: would make balance negative ('+newBalLocal+' '+item.unit+').');
-    return;
-  }
+  // IN = add; OUT / WASTE / ADJ = subtract (floor at 0)
+  var newBal = type === 'IN' ? item.balance + qty : Math.max(0, item.balance - qty);
 
-  // Close the modal optimistically — the user has clicked save
+  S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:newBal}) : i; });
+  var updatedItem = S.items.find(function(i){ return i.id === itemId; });
+  var newEntry = {
+    id: Date.now(), ts: new Date().toISOString(),
+    itemId: itemId, itemName: item.name,
+    type: type, qty: qty, note: note||''
+  };
+  S.history = [newEntry].concat(S.history).slice(0, 5000);
   S.logModal = null; S.logQty = ''; S.logNote = ''; S.logErr = '';
+  pushHistoryEntry(newEntry);   // atomic per-entry write — won't be overwritten
+  saveItem(updatedItem);        // atomic per-item write — won't clobber other items being edited on another device
 
-  /* Hand off to the transaction-based writer. It re-reads the live
-     balance inside the transaction and uses Firebase's CAS retry to
-     guarantee atomicity vs. concurrent writers. */
-  stockTransaction(itemId, type, qty, note, function(ok, reason){
-    if (!ok) {
-      // Transaction module already showed an error toast.
-      render();
-      return;
+  // ── FEATURE 1: AUTOMATED STOCK ALERT ──────────────────────────────
+  // Fires only when stock first crosses below threshold or first hits zero.
+  // Does NOT fire repeatedly for every OUT while already low.
+  if (type !== 'IN' && alertsRef) {
+    var wasAboveThreshold = prevBal >= item.threshold;
+    var wasAboveZero      = prevBal > 0;
+    var isNowOut          = newBal === 0;
+    var isNowLow          = newBal > 0 && newBal < item.threshold;
+
+    if (isNowOut && wasAboveZero) {
+      sendStockAlert({
+        type: 'auto_out', status: 'OUT',
+        itemId: itemId, itemName: item.name,
+        balance: newBal, threshold: item.threshold, unit: item.unit,
+        message: '🚨 OUT OF STOCK: ' + item.name +
+                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+      });
+      _saveAlertedItem(itemId, 'OUT');
+    } else if (isNowLow && wasAboveThreshold) {
+      sendStockAlert({
+        type: 'auto_low', status: 'LOW',
+        itemId: itemId, itemName: item.name,
+        balance: newBal, threshold: item.threshold, unit: item.unit,
+        message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
+                 newBal + ' ' + item.unit +
+                 ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
+      });
+      _saveAlertedItem(itemId, 'LOW');
+    } else if (type === 'IN' && newBal >= item.threshold) {
+      // Stock restored above threshold — clear dedup so next dip re-alerts
+      delete _alertedItems[String(itemId)];
+      try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
     }
+  }
+  // ── END AUTOMATED STOCK ALERT ─────────────────────────────────────
 
-    /* The transaction succeeded. S.items and S.history have already
-       been updated locally by stockTransaction(). Compute the actual
-       new balance from local state for alert decisions. */
-    var freshItem = S.items.find(function(i){ return i.id === itemId; });
-    var newBal = freshItem ? r2(freshItem.balance) : newBalLocal;
-
-    // ── HISTORY-CAP WARNING (preserved from previous behaviour) ─────
-    var HISTORY_CAP = 2000;
-    if (S.history.length >= HISTORY_CAP && !S._historyCapWarned) {
-      S._historyCapWarned = true;
-      setTimeout(function(){
-        showToast('⚠ History at ' + HISTORY_CAP + ' entries — older records dropping. Export a backup soon.', 5000);
-      }, 600);
-    }
-
-    // ── FEATURE 1: AUTOMATED STOCK ALERT ──────────────────────────────
-    // Fires only when stock first crosses below threshold or first hits zero.
-    if (alertsRef) {
-      if (type !== 'IN') {
-        var wasAboveThreshold = prevBal >= item.threshold;
-        var wasAboveZero      = prevBal > 0;
-        var isNowOut          = newBal <= 0;
-        var isNowLow          = newBal > 0 && newBal < item.threshold;
-
-        if (isNowOut && wasAboveZero) {
-          sendStockAlert({
-            type: 'auto_out', status: 'OUT',
-            itemId: itemId, itemName: item.name,
-            balance: newBal, threshold: item.threshold, unit: item.unit,
-            message: '🚨 OUT OF STOCK: ' + item.name +
-                     ' has reached 0 ' + item.unit + '. Please roast more urgently.'
-          });
-          _saveAlertedItem(itemId, 'OUT');
-        } else if (isNowLow && wasAboveThreshold) {
-          sendStockAlert({
-            type: 'auto_low', status: 'LOW',
-            itemId: itemId, itemName: item.name,
-            balance: newBal, threshold: item.threshold, unit: item.unit,
-            message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
-                     newBal + ' ' + item.unit +
-                     ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
-          });
-          _saveAlertedItem(itemId, 'LOW');
-        }
-      } else if (type === 'IN' && newBal >= item.threshold) {
-        // Stock restored above threshold — clear dedup so next dip re-alerts
-        delete _alertedItems[String(itemId)];
-        try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
-      }
-    }
-    // ── END AUTOMATED STOCK ALERT ─────────────────────────────────────
-
-    var icons = {IN:'📥',OUT:'📤',WASTE:'🗑',ADJ:'✏️'};
-    showToast((icons[type]||'•')+' '+qty+' '+item.unit+' logged as '+type+' for '+item.name);
-    render();
-  });
+  var icons = {IN:'📥',OUT:'📤',WASTE:'🗑',ADJ:'✏️'};
+  showToast((icons[type]||'•')+' '+qty+' '+item.unit+' logged as '+type+' for '+item.name);
+  render();
 }
 function addItem(item) {
-  /* Sanitize inputs before persisting */
-  var name = String(item.name||'').trim();
-  if (!name) { showToast('⚠️ Item name is required.'); return; }
-  var bal = r2(Number(item.balance));
-  if (!isFinite(bal) || bal < 0) bal = 0;
-  var thr = r2(Number(item.threshold));
-  if (!isFinite(thr) || thr < 0) thr = 0;
-  /* Use Date.now() but ensure uniqueness vs existing items */
-  var newId = Date.now();
-  while (S.items.some(function(i){ return Number(i.id) === newId; })) newId++;
-  var clean = {
-    id: newId,
-    name: name,
-    category: String(item.category||'Other').trim() || 'Other',
-    origin: String(item.origin||'').trim(),
-    unit: String(item.unit||'kg').trim() || 'kg',
-    balance: bal,
-    threshold: thr
-  };
-  S.items = S.items.concat([clean]);
+  var newItem = Object.assign({}, item, {id: Date.now()});
+  S.items = S.items.concat([newItem]);
   S.newItem = null; S.showAddItem = false;
-  saveAll();
-  logAudit('add_item', { id: clean.id, name: clean.name, category: clean.category,
-                         balance: clean.balance, threshold: clean.threshold, unit: clean.unit });
-  showToast('✅ '+name+' added.'); render();
+  /* Use saveItem (surgical per-child write) not saveAll.
+     saveAll writes S.items as a keyed object which is correct,
+     but also touches every other item unnecessarily.
+     saveItem writes only items/<id> — cleaner and avoids
+     any risk of mixed-key collisions on rapid concurrent adds. */
+  saveItem(newItem);
+  showToast('✅ '+item.name+' added.'); render();
 }
 function deleteItem(id) {
   var item = S.items.find(function(i){ return i.id === id; });
-  if(!item) { showToast('⚠️ Item not found.'); return; }
-  /* Count history entries attached to this item so the user knows the impact */
-  var attachedCount = S.history.filter(function(e){
-    return Number(e.itemId) === Number(id);
-  }).length;
-  var bal = r2(item.balance);
-  var msg = 'Remove "'+item.name+'" from inventory?';
-  if (bal > 0) msg += '\n\n⚠ Current balance: '+bal+' '+item.unit+' will be lost.';
-  if (attachedCount > 0) msg += '\n\n📋 '+attachedCount+' movement record'+(attachedCount===1?'':'s')+' for this item will also be deleted.';
-  msg += '\n\nThis cannot be undone.';
-
-  showConfirm('Delete Item', msg, function(){
-    /* Re-verify the item still exists (concurrent modification) */
-    var liveItem = S.items.find(function(i){ return i.id === id; });
-    if (!liveItem) { showToast('⚠️ Item already removed.'); render(); return; }
-    /* Remove the item AND its history entries together to avoid orphans */
+  if(!item) return;
+  showConfirm('Delete Item', 'Remove "'+item.name+'" from inventory? This cannot be undone.', function(){
     S.items = S.items.filter(function(i){ return i.id !== id; });
-    /* Collect deleted entry IDs BEFORE filtering so we can clean up their comments */
-    var deletedEntryIds = {};
-    S.history.forEach(function(e){ if(Number(e.itemId) === Number(id)) deletedEntryIds[String(e.id)] = 1; });
-    S.history = S.history.filter(function(e){ return Number(e.itemId) !== Number(id); });
-    /* Clean up comments keyed to the deleted history entries */
-    Object.keys(deletedEntryIds).forEach(function(eid){ delete S.comments[eid]; });
+    /* Explicitly remove the item key from Firebase.
+       saveAll() alone is NOT enough — it rewrites remaining items but
+       leaves items/<id> sitting in Firebase. Other devices receive the
+       full snapshot including the ghost key and the deleted item
+       resurrects on their screen. fbRef.child().remove() deletes the
+       key atomically so ALL connected devices stop seeing it instantly. */
+    _deletedItemIds[String(id)] = Date.now(); // prevent Firebase echo from resurrecting this item
+    if(fbRef) fbRef.child('items/' + String(id)).remove();
     saveAll();
-    logAudit('delete_item', {
-      id: id, name: liveItem.name,
-      lostBalance: r2(liveItem.balance), unit: liveItem.unit,
-      historyEntriesRemoved: attachedCount
-    });
-    showToast('🗑 '+liveItem.name+' removed'+(attachedCount?' (with '+attachedCount+' history record'+(attachedCount===1?'':'s')+')':'')+'.');
-    render();
+    showToast('🗑 '+item.name+' removed.'); render();
   });
 }
 function changePwd(np) {
@@ -2765,184 +2442,28 @@ function changePwd(np) {
 }
 
 function clearAllHistory() {
-  if (!S.history.length) { showToast('No history to clear.'); return; }
-  showConfirm(
-    'Clear All History',
-    '⚠️ This will permanently delete ALL ' + S.history.length + ' movement records.\n\n' +
-    'Current stock balances will be PRESERVED (frozen at their current values), but you will lose the audit trail showing how they got there.\n\n' +
-    'Reports and Daily Ledger will be empty until new movements are recorded.\n\n' +
-    'Recommended: export a backup first (Settings → Data → Export Backup).\n\n' +
-    'This cannot be undone.',
-    function(){
-      var deletedCount = S.history.length;
-      // Wipe the history array. Balances on items are intentionally left as-is —
-      // they are the authoritative current stock value. The user has been warned that
-      // the audit trail will be lost.
-      S.history = [];
-      // Wipe per-entry comments too — they reference now-deleted entries.
-      S.comments = {};
-      saveAll();
-      logAudit('clear_all_history', { entriesDeleted: deletedCount });
-      showToast('🗑 All movement history cleared.');
-      render();
-    }
-  );
+  showConfirm('Clear All History', '⚠️ Delete ALL movement history? Stock balances will NOT change — only the history log is cleared. This cannot be undone.', function(){
+    S.history = [];
+    fbRef.child('history').remove();
+    showToast('🗑 All history cleared.'); render();
+  });
 }
 
 function deleteHistoryDay(day) {
-  // `day` is a Date.toDateString() value like "Mon May 05 2026"
-  var dayEntries = S.history.filter(function(e){
-    return new Date(e.ts).toDateString() === day;
+  var label = day === new Date().toDateString() ? 'today' : day === new Date(Date.now()-86400000).toDateString() ? 'yesterday' : day;
+  showConfirm('Delete Day\'s History', 'Delete all entries for '+label+'? Stock balances will NOT be changed.', function(){
+    var toRemove = S.history.filter(function(e){ return new Date(e.ts).toDateString() === day; });
+    S.history = S.history.filter(function(e){ return new Date(e.ts).toDateString() !== day; });
+    toRemove.forEach(function(e){ removeHistoryEntry(e.id); });
+    saveAll(); showToast('🗑 Deleted all entries for '+label+'.'); render();
   });
-  if (!dayEntries.length) { showToast('No entries for that day.'); return; }
-
-  // Compute the net balance impact of removing this day's entries.
-  // Removing IN means balance goes down by qty; removing OUT/WASTE means balance goes up;
-  // removing ADJ means balance moves by -qty (signed).
-  var deltas = {}; // itemId -> delta to apply to balance
-  dayEntries.forEach(function(e){
-    var q = Number(e.qty)||0;
-    var k = String(e.itemId);
-    if (!deltas[k]) deltas[k] = 0;
-    if (e.type === 'IN')        deltas[k] -= q;
-    else if (e.type === 'ADJ')  deltas[k] -= q;
-    else                        deltas[k] += q; // OUT, WASTE
-  });
-
-  // Predict new balances; reject if any would go negative.
-  var preview = [];
-  var negativeItems = [];
-  S.items.forEach(function(i){
-    var d = deltas[String(i.id)];
-    if (d === undefined) return;
-    var newBal = r2(Number(i.balance) + d);
-    preview.push({ name: i.name, oldBal: r2(i.balance), newBal: newBal, unit: i.unit });
-    if (newBal < 0) negativeItems.push(i.name + ' (' + newBal + ' ' + i.unit + ')');
-  });
-
-  if (negativeItems.length) {
-    showConfirm(
-      'Cannot Delete Day',
-      '⚠️ Removing this day\'s entries would make these items go negative:\n\n• ' +
-      negativeItems.join('\n• ') +
-      '\n\nDelete more recent entries first, then retry.',
-      function(){}
-    );
-    return;
-  }
-
-  var summary = preview.slice(0, 8).map(function(p){
-    return '• ' + p.name + ': ' + p.oldBal + ' → ' + p.newBal + ' ' + p.unit;
-  }).join('\n');
-  if (preview.length > 8) summary += '\n• …and ' + (preview.length - 8) + ' more items';
-
-  showConfirm(
-    'Delete Day\'s Entries',
-    '⚠️ Delete ALL ' + dayEntries.length + ' entries from ' + day + '?\n\n' +
-    'Stock balances will be recalculated to stay consistent:\n\n' + summary +
-    '\n\nThis cannot be undone.',
-    function(){
-      // Re-verify nothing changed during confirm
-      var liveDayEntries = S.history.filter(function(e){
-        return new Date(e.ts).toDateString() === day;
-      });
-      if (liveDayEntries.length !== dayEntries.length) {
-        showToast('⚠️ Entries changed during confirm — please retry.');
-        render();
-        return;
-      }
-      // Apply balance updates
-      S.items = S.items.map(function(i){
-        var d = deltas[String(i.id)];
-        if (d === undefined) return i;
-        return Object.assign({}, i, { balance: r2(Number(i.balance) + d) });
-      });
-      // Collect deleted entry ids so we can clean comments
-      var deletedIds = {};
-      dayEntries.forEach(function(e){ deletedIds[String(e.id)] = 1; });
-      S.history = S.history.filter(function(e){
-        return new Date(e.ts).toDateString() !== day;
-      });
-      Object.keys(deletedIds).forEach(function(eid){ delete S.comments[eid]; });
-      saveAll();
-      logAudit('bulk_delete_day', {
-        day: day,
-        entriesDeleted: dayEntries.length,
-        balanceAdjustments: Object.keys(deltas).length,
-        preview: preview.slice(0, 20) // before/after for audit
-      });
-      showToast('🗑 ' + dayEntries.length + ' entries from ' + day + ' deleted.');
-      render();
-    }
-  );
 }
 
 function deleteHistoryEntry(entryId) {
-  var entry = S.history.find(function(e){ return String(e.id) === String(entryId); });
-  if(!entry) { showToast('⚠️ Entry not found.'); return; }
-  var item = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
-  var qty = Number(entry.qty)||0;
-  var displayQty = r2(Math.abs(qty));
-
-  /* Compute what the balance would become after removing this entry's effect.
-     IN added qty       → subtract qty (balance goes down)
-     OUT/WASTE subtracted qty → add qty (balance goes up)
-     ADJ added signed qty → subtract signed qty */
-  var newBal = null;
-  if (item) {
-    if (entry.type === 'IN')        newBal = r2(item.balance - qty);
-    else if (entry.type === 'ADJ')  newBal = r2(item.balance - qty);
-    else                            newBal = r2(item.balance + qty); /* OUT, WASTE */
-  }
-
-  var msg;
-  if (!item) {
-    msg = 'Item no longer exists. Delete this orphaned history entry?';
-  } else if (newBal < 0) {
-    msg = '⚠ Deleting this '+entry.type+' of '+displayQty+' '+item.unit+' would make the balance negative ('+newBal+' '+item.unit+'). Adjust the balance manually first, or use ↩ Reverse on more recent entries before deleting this one.';
-    showConfirm('Cannot Delete', msg, function(){});
-    return;
-  } else {
-    msg = 'Delete this '+entry.type+' of '+displayQty+' '+item.unit+' for "'+item.name+'"? Balance will be recalculated from '+r2(item.balance)+' to '+newBal+' '+item.unit+' to stay consistent with history.';
-  }
-
-  showConfirm('Delete Entry', msg, function(){
-    /* Re-read live state inside the confirm callback. The user confirmed
-       based on the values shown in the modal — if the live state differs
-       (Firebase pushed an update while the modal was open), abort. */
-    var liveItem = item ? S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); }) : null;
-    var liveEntry = S.history.find(function(e){ return String(e.id) === String(entryId); });
-    if (!liveEntry) { showToast('⚠️ Entry already deleted.'); render(); return; }
-
-    if (liveItem) {
-      if (r2(liveItem.balance) !== r2(item.balance)) {
-        showToast('⚠️ Stock changed during confirm — please retry.');
-        render();
-        return;
-      }
-      var liveNewBal;
-      if (entry.type === 'IN')        liveNewBal = r2(liveItem.balance - qty);
-      else if (entry.type === 'ADJ')  liveNewBal = r2(liveItem.balance - qty);
-      else                            liveNewBal = r2(liveItem.balance + qty);
-      if (liveNewBal < 0) {
-        showToast('⚠️ Cannot delete: would make balance negative.');
-        return;
-      }
-      S.items = S.items.map(function(i){ return i.id === liveItem.id ? Object.assign({},i,{balance:liveNewBal}) : i; });
-      newBal = liveNewBal; /* update for the toast message */
-    }
+  showConfirm('Delete Entry', 'Delete this entry from history? Stock balance will NOT change. Use ↩ Reverse if you also want to fix the balance.', function(){
     S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
-    saveAll();
-    logAudit('delete_history_entry', {
-      entryId: String(entryId),
-      itemId: entry.itemId, itemName: entry.itemName,
-      origType: entry.type, origQty: qty, origTs: entry.ts,
-      balanceBefore: liveItem ? r2(item.balance) : null,
-      balanceAfter:  liveItem ? newBal : null,
-      orphan: !liveItem
-    });
-    showToast(liveItem ? '🗑 Entry deleted, balance updated to '+newBal+' '+liveItem.unit : '🗑 Orphaned entry deleted.');
-    render();
+    removeHistoryEntry(entryId);
+    saveAll(); showToast('🗑 Entry deleted.'); render();
   });
 }
 
@@ -2951,52 +2472,24 @@ function reverseEntry(entryId) {
   if(!entry) return;
   var item = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
   if(!item) { showToast('⚠️ Item no longer exists.'); return; }
-  var qty = Number(entry.qty)||0;
-  var displayQty = r2(Math.abs(qty));
-  showConfirm('Reverse Entry', 'Reverse '+entry.type+' of '+displayQty+' '+item.unit+' for "'+item.name+'"? This will undo the balance change.', function(){
-    /* Re-read live state inside callback to catch concurrent mutations */
-    var liveItem = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
-    var liveEntry = S.history.find(function(e){ return String(e.id) === String(entryId); });
-    if (!liveItem) { showToast('⚠️ Item disappeared during confirm.'); render(); return; }
-    if (!liveEntry) { showToast('⚠️ Entry already removed.'); render(); return; }
-    if (r2(liveItem.balance) !== r2(item.balance)) {
-      showToast('⚠️ Stock changed during confirm — please retry.');
-      render();
-      return;
-    }
-    /* Reverse the original effect — must be mathematically exact.
-       No Math.max(0,...) clamp: if reversing produces a negative balance,
-       that's a real data problem the user needs to see, not silently hide. */
-    var newBal;
-    if (entry.type === 'IN') newBal = r2(liveItem.balance - qty);
-    else if (entry.type === 'ADJ') newBal = r2(liveItem.balance - qty);
-    else newBal = r2(liveItem.balance + qty); /* OUT, WASTE */
-
-    if (newBal < 0) {
-      showToast('⚠️ Cannot reverse: would make balance negative ('+newBal+' '+liveItem.unit+'). Adjust manually first.');
-      return;
-    }
-
-    S.items = S.items.map(function(i){ return i.id === liveItem.id ? Object.assign({},i,{balance:newBal}) : i; });
+  showConfirm('Reverse Entry', 'Reverse '+entry.type+' of '+entry.qty+' '+item.unit+' for "'+item.name+'"? This will undo the balance change.', function(){
+    var newBal = entry.type === 'IN'
+      ? Math.max(0, item.balance - entry.qty)
+      : item.balance + entry.qty;
+    S.items = S.items.map(function(i){ return i.id === item.id ? Object.assign({},i,{balance:newBal}) : i; });
     S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
-    /* Build a new history entry that mirrors the reversal */
-    var revType, revQty;
-    if (entry.type === 'ADJ') {
-      revType = 'ADJ';
-      revQty = -qty; /* flip the sign */
-    } else {
-      revType = entry.type === 'IN' ? 'OUT' : 'IN';
-      revQty = displayQty;
-    }
-    S.history = [{
-      id: uniqueId(), ts: new Date().toISOString(),
-      itemId: liveItem.id, itemName: liveItem.name,
-      type: revType,
-      qty: revQty,
+    var revEntry = {
+      id: Date.now(), ts: new Date().toISOString(),
+      itemId: item.id, itemName: item.name,
+      type: entry.type === 'IN' ? 'OUT' : 'IN',
+      qty: entry.qty,
       note: '↩ REVERSAL of '+entry.type+' entry'+(entry.note?' (was: '+entry.note+')':'')
-    }].concat(S.history).slice(0, 2000);
+    };
+    S.history = [revEntry].concat(S.history).slice(0,5000);
+    removeHistoryEntry(entryId);   // surgical remove of the original
+    pushHistoryEntry(revEntry);    // surgical add of the reversal
     saveAll();
-    showToast('↩ Entry reversed for '+liveItem.name);
+    showToast('↩ Entry reversed for '+item.name);
     render();
   });
 }
@@ -3044,41 +2537,20 @@ function deleteCategory(name) {
    INLINE BALANCE EDIT
 ══════════════════════════════════════════════════════ */
 function saveEditedBalance(itemId, val) {
-  var n = r2(parseFloat(val));
+  var n = parseFloat(val);
   if(isNaN(n) || n < 0) { showToast('⚠️ Invalid value.'); return; }
   var item = S.items.find(function(i){ return i.id === itemId; });
   if(!item) return;
-  var old = r2(item.balance);
-  var delta = r2(n - old);
-
-  // Safety check: re-read live state to detect concurrent mutation
-  // (e.g. Firebase pushed a remote update during the edit).
-  var liveItem = S.items.find(function(i){ return i.id === itemId; });
-  if (!liveItem) { showToast('⚠️ Item disappeared during save.'); return; }
-  if (r2(liveItem.balance) !== old) {
-    showToast('⚠️ Stock changed elsewhere during your edit. Please retry.');
-    S.editBalId = null; S.editBalVal = '';
-    render();
-    return;
-  }
-
-  // No-op edit: if delta rounds to 0, don't write a confusing 0-qty ADJ entry
-  if (delta === 0) {
-    S.editBalId = null; S.editBalVal = '';
-    showToast('No change.');
-    render();
-    return;
-  }
-
+  var old = item.balance;
   S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:n}) : i; });
-  S.history = [{
-    id: uniqueId(), ts: new Date().toISOString(),
+  var newEntry = {
+    id: Date.now(), ts: new Date().toISOString(),
     itemId: itemId, itemName: item.name,
-    /* SIGNED delta — positive means stock went up, negative means it went down.
-       This lets reports correctly reconstruct the direction of manual edits. */
-    type: 'ADJ', qty: delta,
+    type: 'ADJ', qty: Math.abs(n - old),
     note: '✏️ Manual balance edit: '+old+' → '+n
-  }].concat(S.history).slice(0, 2000);
+  };
+  S.history = [newEntry].concat(S.history).slice(0,5000);
+  pushHistoryEntry(newEntry);   // atomic per-entry write
 
   // Trigger stock alerts on balance edit (same logic as logMovement)
   if(alertsRef) {
@@ -3107,7 +2579,8 @@ function saveEditedBalance(itemId, val) {
   }
 
   S.editBalId = null; S.editBalVal = '';
-  saveAll(); showToast('✏️ Balance updated to '+n+' '+item.unit); render();
+  var updatedItem = S.items.find(function(i){ return i.id === itemId; });
+  saveItem(updatedItem); showToast('✏️ Balance updated to '+n+' '+item.unit); render();
 }
 
 /* ══════════════════════════════════════════════════════
@@ -3121,7 +2594,7 @@ function exportCSV() {
   S.rptRows.forEach(function(r){
     var d = new Date(r.date+'T12:00:00');
     var dl = d.toLocaleDateString([],{day:'2-digit',month:'short',year:'numeric'});
-    lines.push([dl, r2(r.open), r2(r.in), r2(r.out), r2(r.waste), r2(r.adj), r2(r.close)].join(','));
+    lines.push([dl, r.open, r.in, r.out, r.waste, r.adj, r.close].join(','));
   });
   var csv = 'Windmill Cafe & Roastery \u2014 Stock Report\n'+title+'\n\n'+lines.join('\n');
   var blob = new Blob([csv], {type:'text/csv'});
@@ -3166,51 +2639,33 @@ function exportMovementsCSV(period) {
     // Day separator + summary
     var dStr = g.date.toLocaleDateString([], {weekday:'long', year:'numeric', month:'short', day:'numeric'});
     lines.push('');
-    lines.push(csvEscape('── ' + dStr + ' — IN: ' + (r2(g.totalIn)) + ' kg / OUT: ' + (r2(g.totalOut)) + ' kg ──'));
+    lines.push(csvEscape('── ' + dStr + ' — IN: ' + (Math.round(g.totalIn*10)/10) + ' kg / OUT: ' + (Math.round(g.totalOut*10)/10) + ' kg ──'));
     // Sort items oldest-first within the day
     var sorted = g.items.slice().sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
     sorted.forEach(function(e){
       var d = new Date(e.ts);
-      var qVal = r2(Number(e.qty)||0);
-      var qDisplay;
-      if (e.type === 'IN') qDisplay = '+' + Math.abs(qVal);
-      else if (e.type === 'ADJ') qDisplay = (qVal >= 0 ? '+' : '') + qVal; /* preserve sign */
-      else qDisplay = '-' + Math.abs(qVal); /* OUT, WASTE */
-      // Look up the item's actual unit so non-kg items (lbs, bags, etc.) export correctly.
-      var itm = S.items.find(function(it){ return Number(it.id) === Number(e.itemId); });
-      var entryUnit = itm ? itm.unit : 'kg';
       lines.push([
         d.toLocaleDateString([], {year:'numeric', month:'2-digit', day:'2-digit'}),
         d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}),
         d.toLocaleDateString([], {weekday:'short'}),
         e.itemName || '',
         e.type || '',
-        qDisplay,
-        entryUnit,
+        (e.type === 'IN' ? '+' : '-') + (Number(e.qty)||0),
+        'kg',
         e.note || '',
         e.user || ''
       ].map(csvEscape).join(','));
     });
   });
 
-  // Period totals — handle signed ADJ correctly
-  var totalIn = movs.reduce(function(s,e){
-    var q = Number(e.qty)||0;
-    if (e.type === 'IN') return s + q;
-    if (e.type === 'ADJ' && q > 0) return s + q;
-    return s;
-  }, 0);
-  var totalOut = movs.reduce(function(s,e){
-    var q = Number(e.qty)||0;
-    if (e.type === 'OUT' || e.type === 'WASTE') return s + q;
-    if (e.type === 'ADJ' && q < 0) return s + Math.abs(q);
-    return s;
-  }, 0);
+  // Period totals
+  var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+  var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
   lines.push('');
   lines.push(csvEscape('── PERIOD TOTALS ──'));
-  lines.push(['','','','Total IN','', '+'+(r2(totalIn)),'kg','',''].map(csvEscape).join(','));
-  lines.push(['','','','Total OUT','','-'+(r2(totalOut)),'kg','',''].map(csvEscape).join(','));
-  lines.push(['','','','Net Change','',(totalIn-totalOut>=0?'+':'')+(r2((totalIn-totalOut))),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Total IN','', '+'+(Math.round(totalIn*10)/10),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Total OUT','','-'+(Math.round(totalOut*10)/10),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Net Change','',(totalIn-totalOut>=0?'+':'')+(Math.round((totalIn-totalOut)*10)/10),'kg','',''].map(csvEscape).join(','));
 
   // Build & download — BOM so Excel opens UTF-8 correctly
   var csv = '\uFEFF' + lines.join('\n');
@@ -3252,7 +2707,7 @@ function renderIncoming(h) {
       h += '<div class="incoming-bean-name">🫘 ' + esc(req.bean_name) + '</div>';
       h += '<div class="incoming-meta">Received: ' + esc(ts) + ' &nbsp;·&nbsp; Roast Level: ' + esc(req.roast_level || '—') + '</div>';
       h += '</div>';
-      h += '<div class="incoming-weight">' + r2(Number(req.weight) || 0) + ' ' + esc(req.unit || 'kg') + '</div>';
+      h += '<div class="incoming-weight">' + esc(String(req.weight || 0)) + ' ' + esc(req.unit || 'kg') + '</div>';
       h += '</div>';
 
       /* ── Card Body ── */
@@ -3260,7 +2715,7 @@ function renderIncoming(h) {
 
       if(confidence === 'exact') {
         /* Perfect match — show green confirmation */
-        var newBal = r2(Number(match.item.balance) + Number(req.weight || 0));
+        var newBal = match.item.balance + Number(req.weight || 0);
         h += '<div class="incoming-match-row">';
         h += '<span class="incoming-match-lbl">Matched Item</span>';
         h += '<span class="incoming-match-val">' + esc(match.item.name) + '</span>';
@@ -3268,7 +2723,7 @@ function renderIncoming(h) {
         h += '</div>';
         h += '<div class="incoming-match-row" style="margin-top:8px">';
         h += '<span class="incoming-match-lbl">Current Stock</span>';
-        h += '<span class="incoming-match-val">' + r2(match.item.balance) + ' ' + esc(match.item.unit) + '</span>';
+        h += '<span class="incoming-match-val">' + match.item.balance + ' ' + esc(match.item.unit) + '</span>';
         h += '<span style="color:var(--cream3);font-size:10px">→ will become ' + newBal + ' ' + esc(match.item.unit) + '</span>';
         h += '</div>';
 
@@ -3287,7 +2742,7 @@ function renderIncoming(h) {
         h += '<option value="">— Choose inventory item —</option>';
         S.items.forEach(function(item) {
           var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
-          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + r2(item.balance) + ' ' + esc(item.unit) + ')</option>';
+          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
         });
         h += '</select>';
         h += '<span class="match-fuzzy">⚠ Review Required</span>';
@@ -3307,7 +2762,7 @@ function renderIncoming(h) {
         h += '<option value="">— Choose inventory item —</option>';
         S.items.forEach(function(item) {
           var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
-          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + r2(item.balance) + ' ' + esc(item.unit) + ')</option>';
+          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
         });
         h += '</select>';
         h += '<span class="match-none">✗ No Match Found</span>';
@@ -3376,6 +2831,19 @@ function renderSparkline(rows) {
 /* ══════════════════════════════════════════════════════
    RENDER
 ══════════════════════════════════════════════════════ */
+/* Render-once-per-frame guard: if multiple code paths call render()
+   in the same synchronous tick (e.g. stacked Firebase listener echoes),
+   only the last one actually runs — preventing duplicate card flicker. */
+var _renderScheduled = false;
+function scheduleRender() {
+  if (_renderScheduled) return;
+  _renderScheduled = true;
+  requestAnimationFrame(function() {
+    _renderScheduled = false;
+    render();
+  });
+}
+
 function render() {
   var app = document.getElementById('app');
   if(!app || app.style.display === 'none') return;
@@ -3455,7 +2923,7 @@ function render() {
       h += '<div id="overlay"><div class="modal">'
         +'<div class="modal-hdr"><div class="modal-icon">'+(S.logType==='IN'?'📥':'📤')+'</div>'
         +'<div><div class="modal-title">'+esc(lItem.name)+'</div>'
-        +'<div class="modal-sub">Current balance: '+r2(lItem.balance)+' '+esc(lItem.unit)+'</div></div></div>'
+        +'<div class="modal-sub">Current balance: '+lItem.balance+' '+esc(lItem.unit)+'</div></div></div>'
         +'<div class="modal-body">'
         +'<div class="modal-type-toggle">'
         +'<button class="type-opt'+(S.logType==='IN'?' sel-in':'')+'" id="typeIn">📥 IN</button>'
@@ -3544,21 +3012,20 @@ function render() {
     +'</div></div>';
 
   /* PENDING UPDATE BANNER */
-  h += '<div id="pending-banner" class="'+(S.pendingUpdate?'visible':'hidden')+'">'
+  h += '<div id="pending-banner" class="'+(S.pendingUpdate?'visible':'hidden')+'" title="Click to refresh now">'
     +'<div class="pending-dot"></div>'
-    +'New stock data received — will refresh when you finish editing.'
+    +'<span>📥 New stock changes received from another device — will refresh when you finish editing.</span>'
+    +'<button class="pending-refresh" id="pendingRefreshBtn">↻ Refresh now</button>'
     +'</div>';
 
   /* METRICS */
   var todIn   = todayMoves(null,'IN');
   var todOut  = todayMoves(null,'OUT');
-  var todInR  = r2(todIn);
-  var todOutR = r2(todOut);
-  var totBal  = r2(S.items.reduce(function(s,i){ return s+i.balance; },0));
+  var totBal  = S.items.reduce(function(s,i){ return s+i.balance; },0);
   h += '<div class="metrics">'
     +'<div class="metric"><div class="metric-val" style="color:var(--gold2)">'+totBal.toLocaleString()+'</div><div class="metric-lbl">Total Balance</div><div class="metric-sub">kg on hand</div></div>'
-    +'<div class="metric"><div class="metric-val" style="color:var(--green)">'+(todInR>0?'+':'')+todInR.toLocaleString()+'</div><div class="metric-lbl">In Today</div><div class="metric-sub">kg received</div></div>'
-    +'<div class="metric"><div class="metric-val" style="color:'+(todOutR>0?'var(--red)':'var(--cream3)')+'">'+(todOutR>0?'-':'')+todOutR.toLocaleString()+'</div><div class="metric-lbl">Out Today</div><div class="metric-sub">kg used/sold</div></div>'
+    +'<div class="metric"><div class="metric-val" style="color:var(--green)">+'+todIn.toLocaleString()+'</div><div class="metric-lbl">In Today</div><div class="metric-sub">kg received</div></div>'
+    +'<div class="metric"><div class="metric-val" style="color:var(--red)">-'+todOut.toLocaleString()+'</div><div class="metric-lbl">Out Today</div><div class="metric-sub">kg used/sold</div></div>'
     +'<div class="metric"><div class="metric-val" style="font-size:15px;color:'+(sync?'var(--orange)':'var(--cream)')+';margin-top:2px">'+fmtTime(S.lastSync)+'</div><div class="metric-lbl">Last Updated</div><div class="metric-sub">'+fmtDate(S.lastSync)+'</div></div>'
     +'</div>';
 
@@ -3584,13 +3051,13 @@ function render() {
     var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
     var outCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
     var origCnt= Array.from(new Set(S.items.map(function(i){ return i.origin; }))).length;
-    var totBalDash = r2(S.items.reduce(function(s,i){ return s+Number(i.balance); }, 0));
+    var totBalDash = S.items.reduce(function(s,i){ return s+Number(i.balance); }, 0);
     var healthCls = outCnt>0 ? 'kpi-crit' : lowCnt>0 ? 'kpi-warn' : 'kpi-good';
     var healthLbl = outCnt>0 ? outCnt+' out · '+lowCnt+' low' : lowCnt>0 ? lowCnt+' low · all in stock' : 'All healthy';
     h += '<div class="kpi-row">'
       +'<div class="kpi-tile">'
       +'<div class="kpi-row-top"><span class="kpi-icon">☕</span><span class="kpi-lbl">Total Stock</span></div>'
-      +'<div class="kpi-val" style="color:var(--gold3)">'+totBalDash.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-val" style="color:var(--gold3)">'+Math.round(totBalDash).toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
       +'<div class="kpi-sub"><span class="kpi-pulse-dot"></span>'+S.items.length+' items live</div>'
       +'</div>'
       +'<div class="kpi-tile">'
@@ -3605,12 +3072,12 @@ function render() {
       +'</div>'
       +'<div class="kpi-tile">'
       +'<div class="kpi-row-top"><span class="kpi-icon">📥</span><span class="kpi-lbl">In Today</span></div>'
-      +'<div class="kpi-val" style="color:var(--green)">'+(todInR>0?'+':'')+todInR.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-val" style="color:var(--green)">+'+todIn.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
       +'<div class="kpi-sub">stock received</div>'
       +'</div>'
       +'<div class="kpi-tile">'
       +'<div class="kpi-row-top"><span class="kpi-icon">📤</span><span class="kpi-lbl">Out Today</span></div>'
-      +'<div class="kpi-val" style="color:'+(todOutR>0?'var(--red)':'var(--cream3)')+'">'+(todOutR>0?'−':'')+todOutR.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
+      +'<div class="kpi-val" style="color:'+(todOut?'var(--red)':'var(--cream3)')+'">'+(todOut?'−':'')+todOut.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
       +'<div class="kpi-sub">stock used</div>'
       +'</div>'
       +'</div>';
@@ -3644,12 +3111,12 @@ function render() {
         var st = getStatus(item.balance, item.threshold), m = SM[st];
         var pct = Math.min(100, Math.round((item.balance/Math.max(item.threshold*4,1))*100));
         var tIn = todayMoves(item.id,'IN'), tOut = todayMoves(item.id,'OUT');
-        h += '<div class="card'+(S.flashId===item.id?' flash':'')+'" style="border-color:'+(st==='OK'?'var(--border2)':st==='LOW'?'var(--orng-bd)':'var(--red-bd)')+'">'
+        h += '<div class="card'+(S.flashId===item.id?' flash':'')+'" data-id="'+item.id+'" style="border-color:'+(st==='OK'?'var(--border2)':st==='LOW'?'var(--orng-bd)':'var(--red-bd)')+'">'
           +'<div class="card-top"><div><div class="card-name">'+esc(item.name)+'</div>'
           +'<div class="card-cat">'+esc(item.category)+' · '+esc(item.origin)+'</div></div>'
           +'<span class="badge '+m.cls+'">'+m.lbl+'</span></div>'
-          +'<div class="card-qty"><span class="card-num" style="color:'+m.color+'">'+r2(item.balance).toLocaleString()+'</span><span class="card-unit">'+esc(item.unit)+'</span></div>'
-          +'<div class="card-moves"><span class="move-in">'+(tIn>0?'📥 +'+r2(tIn)+' today':'—')+'</span><span class="move-out">'+(tOut>0?'📤 -'+r2(tOut)+' today':'—')+'</span></div>'
+          +'<div class="card-qty"><span class="card-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+'</span><span class="card-unit">'+esc(item.unit)+'</span></div>'
+          +'<div class="card-moves"><span class="move-in">'+(tIn>0?'📥 +'+tIn+' today':'—')+'</span><span class="move-out">'+(tOut>0?'📤 -'+tOut+' today':'—')+'</span></div>'
           +'<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%;background:'+m.color+'"></div></div>'
           +'<div class="card-min">Min threshold: '+item.threshold+' '+esc(item.unit)+'</div>'
           +'</div>';
@@ -3766,19 +3233,8 @@ function render() {
     if(S.history.length) {
       var movs = filteredMovements();
       var groups = groupByDay(movs);
-      /* Sum signed ADJ correctly: positive ADJ adds to IN, negative to OUT */
-      var totalIn = movs.reduce(function(s,e){
-        var q = Number(e.qty)||0;
-        if (e.type === 'IN') return s + q;
-        if (e.type === 'ADJ' && q > 0) return s + q;
-        return s;
-      }, 0);
-      var totalOut = movs.reduce(function(s,e){
-        var q = Number(e.qty)||0;
-        if (e.type === 'OUT' || e.type === 'WASTE') return s + q;
-        if (e.type === 'ADJ' && q < 0) return s + Math.abs(q);
-        return s;
-      }, 0);
+      var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+      var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
       var net = totalIn - totalOut;
 
       var cntT={today:0,week:0,month:0,all:S.history.length};
@@ -3818,11 +3274,11 @@ function render() {
         +'</div>';
       h += '<div class="mov-stats">'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Total IN</div>'
-          +'<div class="mov-stat-val" style="color:var(--green)">+'+(r2(totalIn))+'<span class="mov-stat-unit">kg</span></div></div>'
+          +'<div class="mov-stat-val" style="color:var(--green)">+'+(Math.round(totalIn*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Total OUT</div>'
-          +'<div class="mov-stat-val" style="color:var(--red)">−'+(r2(totalOut))+'<span class="mov-stat-unit">kg</span></div></div>'
+          +'<div class="mov-stat-val" style="color:var(--red)">−'+(Math.round(totalOut*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Net Change</div>'
-          +'<div class="mov-stat-val" style="color:'+(net>=0?'var(--green)':'var(--red)')+'">'+(net>=0?'+':'')+(r2(net))+'<span class="mov-stat-unit">kg</span></div></div>'
+          +'<div class="mov-stat-val" style="color:'+(net>=0?'var(--green)':'var(--red)')+'">'+(net>=0?'+':'')+(Math.round(net*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
         +'</div>';
       h += '<div class="mov-list">';
       if (!movs.length) {
@@ -3838,18 +3294,17 @@ function render() {
 
           h += '<div class="mov-day-hdr"><span>'+dStr+'</span>'
             +'<span class="mov-day-hdr-right">'
-            +(g.totalIn>0?'<span style="color:var(--green)">+'+(r2(g.totalIn))+'</span>':'')
+            +(g.totalIn>0?'<span style="color:var(--green)">+'+(Math.round(g.totalIn*10)/10)+'</span>':'')
             +(g.totalIn>0 && g.totalOut>0?' · ':'')
-            +(g.totalOut>0?'<span style="color:var(--red)">−'+(r2(g.totalOut))+'</span>':'')
+            +(g.totalOut>0?'<span style="color:var(--red)">−'+(Math.round(g.totalOut*10)/10)+'</span>':'')
             +' kg</span></div>';
 
           g.items.slice().sort(function(a,b){return new Date(b.ts)-new Date(a.ts);}).forEach(function(e){
-            var isIn = movDir(e) === 'IN';
-            var absQty = r2(Math.abs(Number(e.qty)||0));
+            var isIn = e.type==='IN';
             h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
               +'<span class="hist-name">'+esc(e.itemName)+'</span>'
               +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-              +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+absQty+' kg</span>'
+              +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
               +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
           });
         });
@@ -3868,9 +3323,9 @@ function render() {
       var st = getStatus(item.balance, item.threshold), m = SM[st];
       var iIn = todayMoves(item.id,'IN'), iOut = todayMoves(item.id,'OUT');
       h += '<div class="bal-row"><span class="bal-name">'+esc(item.name)+'<br><span style="font-size:9px;color:var(--cream3);font-family:\'Barlow Condensed\'">'+esc(item.origin)+'</span></span>'
-        +'<span class="bal-in">'+(iIn>0?'+'+r2(iIn)+' kg':'—')+'</span>'
-        +'<span class="bal-out">'+(iOut>0?'-'+r2(iOut)+' kg':'—')+'</span>'
-        +'<span class="bal-num" style="color:'+m.color+'">'+r2(item.balance).toLocaleString()+' '+esc(item.unit)+'</span>'
+        +'<span class="bal-in">'+(iIn>0?'+'+iIn+' kg':'—')+'</span>'
+        +'<span class="bal-out">'+(iOut>0?'-'+iOut+' kg':'—')+'</span>'
+        +'<span class="bal-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+' '+esc(item.unit)+'</span>'
         +'<span><span class="badge '+m.cls+'">'+m.lbl+'</span></span></div>';
     });
     h += '</div>';
@@ -3879,12 +3334,11 @@ function render() {
     if(todHist.length) {
       h += '<div class="hist-panel"><div class="hist-head"><span>All movements today</span><span style="font-size:9px">'+todHist.length+' records</span></div><div class="hist-scroll">';
       todHist.forEach(function(e){
-        var isIn = movDir(e) === 'IN';
-        var absQty = r2(Math.abs(Number(e.qty)||0));
+        var isIn = e.type==='IN';
         h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
           +'<span class="hist-name">'+esc(e.itemName)+'</span>'
           +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+absQty+' kg</span>'
+          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
           +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
       });
       h += '</div></div>';
@@ -3935,20 +3389,11 @@ function render() {
       var productLabel = selectedItem ? selectedItem.name : 'All Products';
       var unit = selectedItem ? selectedItem.unit : 'kg';
 
-      // Summary cards — per spec: +ADJ counts as IN, -ADJ counts as OUT.
-      // We still expose the raw adj total separately for an audit-trail card.
-      var totIn=0, totOut=0, totWaste=0, totAdj=0, totAdjPos=0, totAdjNeg=0;
-      rows.forEach(function(r){
-        totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj;
-        if(r.adj > 0) totAdjPos += r.adj;
-        else if(r.adj < 0) totAdjNeg += Math.abs(r.adj);
-      });
-      var openBal  = r2(rows.length ? rows[0].open  : 0);
-      var closeBal = r2(rows.length ? rows[rows.length-1].close : 0);
-      // Bucketed totals: IN includes positive ADJ; OUT includes negative ADJ
-      var bucketIn  = r2(totIn + totAdjPos);
-      var bucketOut = r2(totOut + totAdjNeg);
-      totIn=r2(totIn); totOut=r2(totOut); totWaste=r2(totWaste); totAdj=r2(totAdj);
+      // Summary cards
+      var totIn=0, totOut=0, totWaste=0, totAdj=0;
+      rows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
+      var openBal  = rows.length ? rows[0].open  : 0;
+      var closeBal = rows.length ? rows[rows.length-1].close : 0;
 
       h += '<div class="rpt-title-bar">'
         +'<div><div class="rpt-product-name">'+esc(productLabel)+'</div>'
@@ -3958,10 +3403,10 @@ function render() {
 
       h += '<div class="rpt-summary">'
         +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--cream)">'+openBal.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Opening Stock</div></div>'
-        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--green)">'+(bucketIn>0?'+':'')+bucketIn.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total IN</div></div>'
-        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--red)">'+(bucketOut>0?'-':'')+bucketOut.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total OUT</div></div>'
-        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--orange)">'+(totWaste>0?'-':'')+totWaste.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total Waste</div></div>'
-        +(totAdj?'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--blue)">'+(totAdj>0?'+':'')+totAdj.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Adjustments (net)</div></div>':'')
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--green)">+'+totIn.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total IN</div></div>'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--red)">-'+totOut.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total OUT</div></div>'
+        +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--orange)">-'+totWaste.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total Waste</div></div>'
+        +(totAdj?'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--blue)">'+totAdj.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Adjustments</div></div>':'')
         +'<div class="rpt-card rpt-card-close"><div class="rpt-card-val" style="color:var(--gold3)">'+closeBal.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Closing Stock</div></div>'
         +'</div>';
 
@@ -3976,30 +3421,18 @@ function render() {
           +'<div class="rpt-hdr">'
           +'<span>Date</span><span>Opening</span><span>IN 📥</span><span>OUT 📤</span><span>Waste 🗑</span><span>Adj ✏️</span><span>Closing</span>'
           +'</div>';
-        // Compute a sensible "low" threshold for the closing-stock cell coloring.
-        // Per-product report → use that product's threshold.
-        // All-products report → use the average threshold of relevant items so
-        // the color makes sense relative to the data, not a hardcoded 50.
-        var rowLowMark;
-        if (selectedItem) {
-          rowLowMark = selectedItem.threshold;
-        } else {
-          var rowItems = (S.rptCat === 'All') ? S.items : S.items.filter(function(i){ return i.category === S.rptCat; });
-          var totalThr = rowItems.reduce(function(s,i){ return s + Number(i.threshold||0); }, 0);
-          rowLowMark = rowItems.length ? totalThr : 0;  /* sum, since rows aggregate */
-        }
         rows.forEach(function(r){
           var d = new Date(r.date+'T12:00:00');
           var dayLabel = d.toLocaleDateString([],{weekday:'short',day:'numeric',month:'short'});
-          var ro = r2(r.open), ri = r2(r.in), rout = r2(r.out), rw = r2(r.waste), ra = r2(r.adj), rc = r2(r.close);
+          var netOk = r.close >= 0;
           h += '<div class="rpt-row">'
             +'<span class="rpt-date-cell">'+esc(dayLabel)+'</span>'
-            +'<span class="rpt-num">'+ro.toLocaleString()+'</span>'
-            +'<span class="rpt-num" style="color:var(--green)">'+(ri?'+'+ri.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num" style="color:var(--red)">'+(rout?'-'+rout.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num" style="color:var(--orange)">'+(rw?'-'+rw.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num" style="color:var(--blue)">'+(ra?(ra>0?'+':'')+ra.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num rpt-close" style="color:'+(rc<=0?'var(--red)':(rowLowMark>0 && rc<rowLowMark)?'var(--orange)':'var(--gold3)')+'">'+rc.toLocaleString()+'</span>'
+            +'<span class="rpt-num">'+r.open.toLocaleString()+'</span>'
+            +'<span class="rpt-num" style="color:var(--green)">'+(r.in?'+'+r.in.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--red)">'+(r.out?'-'+r.out.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--orange)">'+(r.waste?'-'+r.waste.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--blue)">'+(r.adj?r.adj.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num rpt-close" style="color:'+(r.close<=0?'var(--red)':r.close<(selectedItem?selectedItem.threshold:50)?'var(--orange)':'var(--gold3)')+'">'+r.close.toLocaleString()+'</span>'
             +'</div>';
         });
         h += '</div></div>';
@@ -4014,16 +3447,14 @@ function render() {
     h = renderIncoming(h);
   } else if(S.view === 'provision') {
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
-    var outItems  = needItems.filter(function(i){ return getStatus(i.balance,i.threshold) === 'OUT'; });
-    var lowItems  = needItems.filter(function(i){ return getStatus(i.balance,i.threshold) === 'LOW'; });
+    var outItems  = needItems.filter(function(i){ return i.balance === 0; });
+    var lowItems  = needItems.filter(function(i){ return i.balance > 0; });
     h += '<div class="section-label">Provisioning & Purchase Planner</div>';
     h += '<div class="prov-wrap">';
     h += '<div class="prov-summary">'
       +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--red)">'+outItems.length+'</div><div class="prov-stat-lbl">Out of Stock</div></div>'
       +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--orange)">'+lowItems.length+'</div><div class="prov-stat-lbl">Low Stock</div></div>'
-      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--gold2)">'+r2(needItems.reduce(function(s,i){
-          return s + provisionSuggestion(i);
-        },0)).toLocaleString()+'</div><div class="prov-stat-lbl">Total kg to Order</div></div>'
+      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--gold2)">'+needItems.reduce(function(s,i){return s+(Math.max(i.threshold*2,i.threshold-i.balance+50));},0).toLocaleString()+'</div><div class="prov-stat-lbl">Total kg to Order</div></div>'
       +(S.teamUnlocked?'<div style="display:flex;align-items:center;padding:0 4px"><button class="btn-copy-prov" id="copyProvBtn">📋 Copy Order List</button></div>':'')
       +'</div>';
     if(!needItems.length) {
@@ -4033,13 +3464,14 @@ function render() {
         +'<div class="prov-hdr"><span>Coffee Bean</span><span>Current</span><span>Min Level</span><span>Deficit</span><span>Avg/Day</span><span>Suggested Order</span><span>Status</span></div>';
       needItems.forEach(function(item){
         var st = getStatus(item.balance,item.threshold), m = SM[st];
-        var deficit = Math.max(0, r2(item.threshold - item.balance));
+        var deficit = Math.max(0, item.threshold - item.balance);
         var daily = avgDailyUsage(item.id);
-        // Use shared helper so summary total, this column, and Copy Order List always agree
-        var suggested = provisionSuggestion(item);
+        // Smart suggestion: cover deficit + 14 days of usage (or at least threshold*2)
+        var coverDays = daily > 0 ? Math.ceil((deficit + daily * 14)) : Math.max(item.threshold * 2, deficit + item.threshold);
+        var suggested = Math.max(item.threshold * 2, coverDays);
         h += '<div class="prov-row">'
           +'<span class="prov-name">'+esc(item.name)+'<div class="prov-note">'+esc(item.origin)+'</div></span>'
-          +'<span style="color:'+m.color+';font-weight:600">'+r2(item.balance)+' '+esc(item.unit)+'</span>'
+          +'<span style="color:'+m.color+';font-weight:600">'+item.balance+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--cream3)">'+item.threshold+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--red)">'+deficit+' '+esc(item.unit)+'</span>'
           +'<span style="color:var(--cream3)">'+(daily > 0 ? daily+' '+esc(item.unit) : '—')+'</span>'
@@ -4195,11 +3627,11 @@ function render() {
             +'<button class="btn-save-bal" data-savebal="'+item.id+'">✓</button>'
             +'<button class="btn-cancel" style="padding:3px 6px;font-size:10px" data-cancelbal="'+item.id+'">✕</button></span>'
           : '<span style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:'+m.color+';font-weight:600;display:flex;align-items:center;justify-content:flex-end;gap:5px">'
-            +r2(item.balance)+' '+esc(item.unit)
-            +'<button class="btn-edit-bal" data-editbal="'+item.id+'" data-editbalval="'+r2(item.balance)+'" title="Edit balance">✏️</button></span>'
+            +item.balance+' '+esc(item.unit)
+            +'<button class="btn-edit-bal" data-editbal="'+item.id+'" data-editbalval="'+item.balance+'" title="Edit balance">✏️</button></span>'
         )
-        +'<span style="text-align:right;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+(tIn2?'+'+r2(tIn2):'—')+'</span>'
-        +'<span style="text-align:right;color:var(--red);font-family:\'JetBrains Mono\',monospace">'+(tOut2?'-'+r2(tOut2):'—')+'</span>'
+        +'<span style="text-align:right;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+(tIn2?'+'+tIn2:'—')+'</span>'
+        +'<span style="text-align:right;color:var(--red);font-family:\'JetBrains Mono\',monospace">'+(tOut2?'-'+tOut2:'—')+'</span>'
         +'<span style="text-align:center"><span class="badge '+m.cls+'">'+m.lbl+'</span></span>'
         +'<span style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">'
         +'<button class="btn-log-in" data-logid="'+item.id+'" data-logtype="IN">📥 IN</button>'
@@ -4306,8 +3738,7 @@ function render() {
         grouped[day].forEach(function(e){
           if(shownSoFar >= totalShown) return;
           shownSoFar++;
-          var isIn = movDir(e) === 'IN';
-          var absQty = r2(Math.abs(Number(e.qty)||0));
+          var isIn = e.type==='IN';
           var entryComments = S.comments[String(e.id)] || [];
           var showComments = S.openCommentId === e.id;
           h += '<div style="border-bottom:1px solid var(--border)">'
@@ -4315,7 +3746,7 @@ function render() {
             +'<span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
             +'<span class="hist-name">'+esc(e.itemName)+'</span>'
             +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-            +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+absQty+' kg</span>'
+            +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
             +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'<span></span>')
             +'<div style="display:flex;gap:4px;flex-shrink:0">'
             +'<button class="comment-badge" data-opencomment="'+esc(e.id)+'" title="Comments">💬'+(entryComments.length?' '+entryComments.length:'')+'</button>'
@@ -4641,10 +4072,9 @@ function render() {
       h += '<div class="alerts-list" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">';
       pAlerts.forEach(function(a){
         var isCrit = a.sev === 'CRITICAL';
-        var isOut = getStatus(a.item.balance, a.item.threshold) === 'OUT';
-        var icon = isOut ? '🚨' : isCrit ? '⛔' : '⚠️';
+        var icon = a.item.balance===0 ? '🚨' : isCrit ? '⛔' : '⚠️';
         var daysTxt = '';
-        if (isOut) daysTxt = '<div class="alert-card-days" style="color:var(--red)">📍 Out of stock — restock urgently</div>';
+        if (a.item.balance === 0) daysTxt = '<div class="alert-card-days" style="color:var(--red)">📍 Out of stock — restock urgently</div>';
         else if (a.daysLeft != null) {
           var dColor = a.daysLeft <= 3 ? 'var(--red)' : a.daysLeft <= 7 ? 'var(--orange)' : 'var(--cream3)';
           daysTxt = '<div class="alert-card-days" style="color:'+dColor+'">⏱ ~'+a.daysLeft+' day'+(a.daysLeft===1?'':'s')+' of stock left</div>';
@@ -4708,22 +4138,25 @@ function bindEvents() {
   var lb=g('lockBtn');  if(lb) lb.onclick=doLock;
   var ll=g('lockLink'); if(ll) ll.onclick=doLock;
   var rb=g('refreshBtn'); if(rb) rb.onclick=function(){ fbRef.once('value',function(snap){ if(snap.val()) applyRemoteData(snap.val(),true); }); };
+  var prb=g('pendingRefreshBtn'); if(prb) prb.onclick=function(ev){
+    ev.stopPropagation();
+    // Blur whatever input the user is in so isBusy() goes false, then re-render
+    if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    S.pendingUpdate = false;
+    showPendingBanner(false);
+    render();
+  };
+  var pb=g('pending-banner'); if(pb) pb.onclick=function(){
+    if(document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    S.pendingUpdate = false;
+    showPendingBanner(false);
+    render();
+  };
 
   document.querySelectorAll('[data-filter]').forEach(function(b){
     b.onclick=function(){ S.filter=this.getAttribute('data-filter'); render(); };
   });
-  var si=g('searchInput');
-  if(si) si.oninput=function(){
-    S.search=this.value;
-    clearTimeout(window._siT);
-    var inp=this;
-    window._siT=setTimeout(function(){
-      var pos=inp.selectionStart;
-      render();
-      var f=document.getElementById('searchInput');
-      if(f){ f.focus(); try{ f.setSelectionRange(pos,pos); }catch(e){} }
-    }, 250);
-  };
+  var si=g('searchInput'); if(si) si.oninput=function(){ S.search=this.value; render(); };
 
   /* Alert Modal */
   var oam=g('openAlertModalBtn'); if(oam) oam.onclick=function(){ S.showAlertModal=true; render(); setTimeout(function(){ var ai=g('manualAlertInput'); if(ai) ai.focus(); },60); };
@@ -4762,27 +4195,12 @@ function bindEvents() {
   var lsb=g('logSaveBtn');
   if(lsb) lsb.onclick=function(){
     var qel=g('logQtyInput'), nel=g('logNoteInput');
-    var rawQty = qel ? qel.value : S.logQty;
-    var qty = parseFloat(rawQty);
-    var note = nel ? nel.value : S.logNote;
-    if (!isFinite(qty) || qty <= 0 || r2(qty) <= 0) {
-      S.logErr = 'Please enter a valid quantity greater than 0.';
-      render();
-      return;
-    }
-    var item = S.items.find(function(i){ return i.id === S.logModal; });
-    if (!item) {
-      S.logErr = 'Item no longer exists. Please close and try again.';
-      render();
-      return;
-    }
-    /* Both OUT and WASTE reduce balance — both must be validated */
-    if ((S.logType === 'OUT' || S.logType === 'WASTE') && r2(qty) > r2(item.balance)) {
-      S.logErr = 'Cannot remove more than current balance ('+r2(item.balance)+' '+item.unit+').';
-      render();
-      return;
-    }
-    logMovement(S.logModal, S.logType, qty, note);
+    var qty=qel?parseFloat(qel.value):parseFloat(S.logQty);
+    var note=nel?nel.value:S.logNote;
+    if(!qty||qty<=0){ S.logErr='Please enter a valid quantity.'; render(); return; }
+    var item=S.items.find(function(i){ return i.id===S.logModal; });
+    if(S.logType==='OUT'&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
+    logMovement(S.logModal,S.logType,qty,note);
   };
   var lcb=g('logCancelBtn'); if(lcb) lcb.onclick=function(){ S.logModal=null; S.logQty=''; S.logNote=''; S.logErr=''; render(); };
 
@@ -4859,18 +4277,7 @@ function bindEvents() {
   /* Team panel filters */
   var tfc=g('tpFilterCat');    if(tfc)    tfc.onchange=function(){ S.tpFilterCat=this.value; render(); };
   var tfs=g('tpFilterStatus'); if(tfs)    tfs.onchange=function(){ S.tpFilterStatus=this.value; render(); };
-  var tfs2=g('tpSearch');
-  if(tfs2) tfs2.oninput=function(){
-    S.tpFilterSearch=this.value;
-    clearTimeout(window._tpsT);
-    var inp=this;
-    window._tpsT=setTimeout(function(){
-      var pos=inp.selectionStart;
-      render();
-      var f=document.getElementById('tpSearch');
-      if(f){ f.focus(); try{ f.setSelectionRange(pos,pos); }catch(e){} }
-    }, 250);
-  };
+  var tfs2=g('tpSearch');      if(tfs2)   tfs2.oninput=function(){ S.tpFilterSearch=this.value; render(); };
 
   /* Category manager */
   var tcm=g('toggleCatMgr');   if(tcm) tcm.onclick=function(){ S.showCatMgr=!S.showCatMgr; render(); };
@@ -4919,7 +4326,7 @@ function bindEvents() {
     S.items.forEach(function(item){
       var st=SM[getStatus(item.balance,item.threshold)].lbl;
       var tI=todayMoves(item.id,'IN'), tO=todayMoves(item.id,'OUT');
-      lines.push([item.name,item.category,r2(item.balance),item.unit,st,r2(tI),r2(tO)].join(','));
+      lines.push([item.name,item.category,item.balance,item.unit,st,tI,tO].join(','));
     });
     var blob=new Blob([lines.join('\n')],{type:'text/csv'});
     var url=URL.createObjectURL(blob); var a=document.createElement('a');
@@ -5004,14 +4411,9 @@ function bindEvents() {
       var dl=d.toLocaleDateString([],{day:'2-digit',month:'short',year:'numeric'});
       lines.push(dl.padEnd(13)+' | '+pad(r.open,7)+' | '+pad(r.in,7)+' | '+pad(r.out,7)+' | '+pad(r.waste,7)+' | '+pad(r.adj,7)+' | '+pad(r.close,7));
     });
-    var totIn=0,totOut=0,totWaste=0,totAdj=0,totAdjPos=0,totAdjNeg=0;
-    S.rptRows.forEach(function(r){
-      totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj;
-      if(r.adj>0) totAdjPos+=r.adj;
-      else if(r.adj<0) totAdjNeg+=Math.abs(r.adj);
-    });
-    var bIn = r2(totIn + totAdjPos), bOut = r2(totOut + totAdjNeg);
-    lines.push('','SUMMARY','Total IN: '+bIn+' | Total OUT: '+bOut+' | Total Waste: '+r2(totWaste)+' | Adjustments (net): '+r2(totAdj)+' | Opening: '+r2(S.rptRows[0].open)+' | Closing: '+r2(S.rptRows[S.rptRows.length-1].close));
+    var totIn=0,totOut=0,totWaste=0,totAdj=0;
+    S.rptRows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
+    lines.push('','SUMMARY','Total IN: '+totIn+' | Total OUT: '+totOut+' | Total Waste: '+totWaste+' | Opening: '+S.rptRows[0].open+' | Closing: '+S.rptRows[S.rptRows.length-1].close);
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Report copied to clipboard!'); });
   };
   /* ── Settings panel ─────────────────────────────────────────────── */
@@ -5153,8 +4555,7 @@ function bindEvents() {
   if(prs) prs.onclick=function(){
     // Clear de-dup tracker so all current LOW/OUT items re-alert
     _alertedItems = {};
-    // FIX: was 'windmill_alerted_items' (never written) — actual key is 'wc-alerted-items'
-    try { localStorage.removeItem('wc-alerted-items'); } catch(e){}
+    try { localStorage.removeItem('windmill_alerted_items'); } catch(e){}
     scanAndSendAlerts();
     if (S.alertPrefs && S.alertPrefs.soundEnabled) {
       var anyAlert = S.items.some(function(i){ return getStatus(i.balance, i.threshold) !== 'OK'; });
@@ -5225,9 +4626,9 @@ function bindEvents() {
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
     var lines = ['Windmill Cafe & Roastery — Purchase Order', new Date().toLocaleDateString(), ''];
     needItems.forEach(function(item){
-      /* Use same shared formula as provisioning view + total summary */
-      var suggested = provisionSuggestion(item);
-      lines.push(item.name+' ('+item.origin+'): '+suggested+' '+item.unit+' — current stock: '+r2(item.balance)+' '+item.unit);
+      var deficit = Math.max(0, item.threshold - item.balance);
+      var suggested = Math.max(item.threshold*2, deficit+item.threshold);
+      lines.push(item.name+' ('+item.origin+'): '+suggested+' '+item.unit+' — current stock: '+item.balance+' '+item.unit);
     });
     navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Order list copied to clipboard!'); });
   };
@@ -5328,7 +4729,10 @@ function startClock() {
   }, 1000);
 }
 
+var _bootDone = false;
 function bootApp() {
+  if (_bootDone) return; // prevent double-init / stacking Firebase listeners
+  _bootDone = true;
   S.syncing = true;
   applyTheme(); // restore saved theme on load
   _loadAlertedItems(); // restore de-dup tracker from localStorage
@@ -5342,10 +4746,16 @@ function bootApp() {
       S.items = DEFAULTS; S.history = []; S.password = 'windmill2024';
     } else {
       S.items       = data.items       ? objToArr(data.items)   : DEFAULTS;
-      S.history     = data.history     ? objToArr(data.history) : [];
+      S.history     = data.history     ? normalizeHistory(objToArr(data.history)) : [];
       S.password    = data.password    || 'windmill2024';
       S.snapshots   = data.snapshots   || {};
       S.teamUpdates = data.teamUpdates || {};
+      // Sort history newest-first (Firebase child writes don't preserve array order)
+      S.history.sort(function(a,b){
+        var ta = a && a.ts ? new Date(a.ts).getTime() : 0;
+        var tb = b && b.ts ? new Date(b.ts).getTime() : 0;
+        return tb - ta;
+      });
     }
     S.syncing = false;
     S.lastSync = new Date();
@@ -5356,18 +4766,6 @@ function bootApp() {
     setTimeout(scanAndSendAlerts, 1500);
     // Auto-snapshot: capture today's state if we don't have one yet
     setTimeout(autoSnapshotCheck, 2000);
-
-    // Bootstrap the audit chain: load the cached previous-hash AND record a
-    // "session_start" event so we have a heartbeat in the log per session.
-    _lastAuditHash = _loadCachedAuditHash();
-    logAudit('session_start', {
-      userAgent: (navigator.userAgent||'').slice(0,200),
-      itemsCount: S.items.length,
-      historyCount: S.history.length
-    });
-
-    // Start the rolling auto-backup system (local + remote + weekly download)
-    startAutoBackup();
 
     // Auto-show alerts popup ONCE per session if any item is below threshold
     setTimeout(function(){
@@ -5381,11 +4779,11 @@ function bootApp() {
     }, 1800);
 
     /* Set up real-time listener.
-       _ignoreRemote = true for 1 second to block the immediate
-       echo-back that fires as soon as .on() is registered. */
-    _ignoreRemote = true;
-    setTimeout(function() { _ignoreRemote = false; }, 1000);
-
+       The boot snapshot we just read is also the first thing the
+       .on('value') listener will deliver. We don't need to block it
+       because applyRemoteData re-applies the same data harmlessly,
+       and the new write-tag system means we only skip echoes of
+       OUR OWN writes — never updates from other devices. */
     fbRef.on('value', function(snap) {
       var d = snap.val();
       if(!d) return;
