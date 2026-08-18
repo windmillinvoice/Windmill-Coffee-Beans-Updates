@@ -13,7 +13,7 @@
 /* ═══════════════════════════════════════════════
    SETUP SCREEN (shown before Firebase configured)
 ═══════════════════════════════════════════════ */
-#setup-screen{position:fixed;inset:0;background:#0c0906;z-index:9000;display:none;align-items:center;justify-content:center;padding:20px;font-family:'Barlow Condensed',sans-serif;}
+#setup-screen{position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:9000;display:none;align-items:center;justify-content:center;padding:20px;font-family:'Barlow Condensed',sans-serif;}
 .setup-box{background:#1a1208;border:1px solid #3f2e1a;border-radius:16px;padding:36px 32px;width:100%;max-width:600px;color:#c0a880;}
 .setup-logo{font-size:36px;margin-bottom:4px;display:block;text-align:center;}
 .setup-title{font-family:'Playfair Display',serif;font-size:22px;color:#f5cc82;text-align:center;margin-bottom:4px;}
@@ -32,18 +32,46 @@
 .setup-note{font-size:10px;color:#8a7050;text-align:center;line-height:1.6;}
 
 :root {
-  --bg:#0c0906;--bg2:#13100a;--surf:#1a1208;--surf2:#231a0c;
-  --border:#2d1f10;--border2:#3f2e1a;
+  --bg:#000000;--bg2:rgba(0,0,0,0.45);--surf:rgba(255,255,255,0.045);--surf2:rgba(255,255,255,0.075);
+  --border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.12);
   --gold:#c8923c;--gold2:#e5b060;--gold3:#f5cc82;
   --cream:#f0e8d8;--cream2:#c0a880;--cream3:#8a7050;
   --green:#4ec87a;--green-bg:rgba(78,200,122,0.1);--green-bd:rgba(78,200,122,0.28);
   --orange:#e8873a;--orng-bg:rgba(232,135,58,0.1);--orng-bd:rgba(232,135,58,0.3);
   --red:#e05252;--red-bg:rgba(224,82,82,0.1);--red-bd:rgba(224,82,82,0.3);
   --blue:#60a8d8;
+  --glass-blur:blur(18px) saturate(160%);
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{min-height:100vh;background:var(--bg);}
-body{font-family:'Barlow Condensed',sans-serif;color:var(--cream2);overflow-x:hidden;}
+body{font-family:'Barlow Condensed',sans-serif;color:var(--cream2);overflow-x:hidden;position:relative;}
+
+/* ===== Black Glass background blobs (sit behind all glass panels) ===== */
+body::before{content:'';position:fixed;inset:0;z-index:-2;background:#000;pointer-events:none;}
+body::before{background:
+  radial-gradient(circle at 12% 8%, rgba(200,146,60,0.16) 0%, rgba(200,146,60,0) 38%),
+  radial-gradient(circle at 88% 18%, rgba(78,200,122,0.10) 0%, rgba(78,200,122,0) 40%),
+  radial-gradient(circle at 25% 85%, rgba(96,168,216,0.12) 0%, rgba(96,168,216,0) 42%),
+  radial-gradient(circle at 78% 92%, rgba(200,146,60,0.10) 0%, rgba(200,146,60,0) 40%),
+  #000;
+}
+
+/* ===== Black Glass panels: frosted, translucent, blurred ===== */
+#header,.metric,.setup-box,
+.rpt-card,.rpt-table,.rpt-empty,
+.prov-stat,.prov-table,
+.search-input,.hist-panel,.bal-wrap,
+.team-item-row,.form-box.gold,.form-box.green,
+.comment-inp,.cat-manager,
+.confirm-modal,.btn-confirm-cancel,
+.settings-panel,.pwd-modal,.mov-stat,
+.alert-card,.settings-card,.tu-item,
+.snap-section,.actf-bar,.modal,#toast,
+.manual-alert-panel{
+  backdrop-filter:var(--glass-blur);
+  -webkit-backdrop-filter:var(--glass-blur);
+  box-shadow:0 8px 32px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+}
 button{cursor:pointer;font-family:inherit;border:none;background:none;}
 input,select,textarea{font-family:inherit;}
 ::-webkit-scrollbar{width:4px;height:4px;}
@@ -159,20 +187,27 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .search-input:focus{border-color:var(--gold);}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;padding:0 20px 20px;}
-.card{position:relative;background:linear-gradient(155deg,var(--surf) 0%,var(--bg2) 100%);border:1px solid var(--border2);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:9px;animation:popin 0.35s ease;transition:transform 0.2s,box-shadow 0.2s,border-color 0.2s;min-height:165px;overflow:hidden;}
-.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(200,146,60,0.45),transparent);opacity:0;transition:opacity 0.2s;}
-.card:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,0.4);border-color:var(--gold2);}
-.card:hover::before{opacity:1;}
+.card{position:relative;background:linear-gradient(160deg,rgba(35,26,12,0.42) 0%,rgba(19,16,10,0.55) 100%);-webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);border:1px solid rgba(240,232,216,0.1);border-radius:16px;padding:17px 16px 16px;display:flex;flex-direction:column;gap:9px;animation:popin 0.35s ease;transition:transform 0.28s cubic-bezier(.2,.8,.2,1),box-shadow 0.28s cubic-bezier(.2,.8,.2,1),border-color 0.25s,background 0.25s;min-height:165px;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,0.06) inset,0 10px 24px -14px rgba(0,0,0,0.6),0 2px 6px rgba(0,0,0,0.3);will-change:transform;}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.5),transparent);opacity:0.4;transition:opacity 0.25s;}
+.card::after{content:'';position:absolute;top:-40%;left:-20%;width:75%;height:75%;border-radius:50%;background:radial-gradient(circle,rgba(245,204,130,0.16),transparent 70%);pointer-events:none;opacity:0.7;filter:blur(4px);transition:opacity 0.3s;}
+.card.st-ok{box-shadow:0 1px 0 rgba(255,255,255,0.06) inset,0 0 0 1px rgba(78,200,122,0.08) inset,0 10px 24px -14px rgba(0,0,0,0.6);}
+.card.st-low{background:linear-gradient(160deg,rgba(232,135,58,0.1) 0%,rgba(19,16,10,0.55) 60%);box-shadow:0 1px 0 rgba(255,255,255,0.06) inset,0 0 0 1px rgba(232,135,58,0.14) inset,0 10px 26px -14px rgba(232,135,58,0.18),0 2px 6px rgba(0,0,0,0.3);}
+.card.st-out{background:linear-gradient(160deg,rgba(224,82,82,0.12) 0%,rgba(19,16,10,0.55) 60%);box-shadow:0 1px 0 rgba(255,255,255,0.06) inset,0 0 0 1px rgba(224,82,82,0.16) inset,0 10px 26px -14px rgba(224,82,82,0.22),0 2px 6px rgba(0,0,0,0.3);}
+.card:hover{transform:translateY(-5px) scale(1.012);border-color:var(--gold2);background:linear-gradient(160deg,rgba(45,34,16,0.5) 0%,rgba(19,16,10,0.62) 100%);box-shadow:0 1px 0 rgba(255,255,255,0.08) inset,0 26px 46px -18px rgba(0,0,0,0.7),0 10px 20px -6px rgba(0,0,0,0.4),0 0 26px rgba(200,146,60,0.12);}
+.card.st-low:hover{box-shadow:0 1px 0 rgba(255,255,255,0.08) inset,0 26px 46px -18px rgba(232,135,58,0.35),0 10px 20px -6px rgba(0,0,0,0.4),0 0 26px rgba(232,135,58,0.2);}
+.card.st-out:hover{box-shadow:0 1px 0 rgba(255,255,255,0.08) inset,0 26px 46px -18px rgba(224,82,82,0.4),0 10px 20px -6px rgba(0,0,0,0.4),0 0 26px rgba(224,82,82,0.22);}
+.card:hover::before{opacity:0.8;}
 .card.flash{animation:flashbg 1s ease;}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.card{background:linear-gradient(160deg,var(--surf) 0%,var(--bg2) 100%);}}
 .card-top{display:flex;justify-content:space-between;align-items:flex-start;}
 .card-name{font-family:'Playfair Display',serif;font-size:14px;color:var(--cream);font-weight:600;line-height:1.2;}
 .card-cat{font-size:9px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.12em;margin-top:3px;}
-.badge{font-size:8px;font-weight:700;padding:3px 8px;border-radius:5px;border:1px solid;letter-spacing:0.07em;flex-shrink:0;margin-left:6px;}
+.badge{font-size:8px;font-weight:700;padding:3px 8px;border-radius:5px;border:1px solid;letter-spacing:0.07em;flex-shrink:0;margin-left:6px;box-shadow:0 2px 6px rgba(0,0,0,0.3);}
 .badge-ok{background:var(--green-bg);color:var(--green);border-color:var(--green-bd);}
 .badge-low{background:var(--orng-bg);color:var(--orange);border-color:var(--orng-bd);}
 .badge-out{background:var(--red-bg);color:var(--red);border-color:var(--red-bd);}
 .card-qty{display:flex;align-items:baseline;gap:5px;}
-.card-num{font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:600;line-height:1;letter-spacing:-0.03em;}
+.card-num{font-family:'JetBrains Mono',monospace;font-size:34px;font-weight:600;line-height:1;letter-spacing:-0.03em;text-shadow:0 2px 10px currentColor,0 1px 0 rgba(0,0,0,0.4);filter:brightness(1.05);}
 .card-unit{font-size:12px;color:var(--cream3);}
 .card-moves{display:flex;justify-content:space-between;font-size:10px;font-weight:600;}
 .move-in{color:var(--green);}
@@ -180,6 +215,24 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .bar-wrap{height:5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;overflow:hidden;}
 .bar-fill{height:100%;border-radius:3px;transition:width 0.6s ease;}
 .card-min{font-size:9px;color:var(--cream3);letter-spacing:0.06em;}
+
+/* ═══ Coffee Cup — brewing / draining animation (reflects stock level) ═══ */
+.cc-cup-wrap{position:relative;width:28px;height:38px;flex-shrink:0;}
+.cc-cup{position:absolute;bottom:0;left:3px;right:3px;height:22px;border:1.5px solid rgba(240,232,216,0.4);border-top:none;border-radius:0 0 7px 7px;background:rgba(0,0,0,0.28);overflow:hidden;box-shadow:inset 0 2px 4px rgba(0,0,0,0.4);}
+.cc-cup::after{content:'';position:absolute;right:-6px;top:2px;width:6px;height:9px;border:1.5px solid rgba(240,232,216,0.4);border-left:none;border-radius:0 5px 5px 0;}
+.cc-saucer{position:absolute;bottom:-3px;left:-2px;right:-2px;height:2px;border-radius:50%;background:rgba(240,232,216,0.22);}
+.cc-liquid{position:absolute;bottom:0;left:0;right:0;height:0%;background:linear-gradient(180deg,#d19a4a 0%,#8a5a2c 55%,#4a2e12 100%);transition:height 1.1s cubic-bezier(.4,0,.2,1);}
+.cc-liquid::before{content:'';position:absolute;top:-2px;left:-30%;width:160%;height:5px;background:inherit;border-radius:50%;animation:cc-wave 2.2s ease-in-out infinite;}
+@keyframes cc-wave{0%,100%{transform:translateX(-3px) scaleY(0.75);}50%{transform:translateX(3px) scaleY(1.25);}}
+.cc-bean{position:absolute;left:50%;top:-10px;width:5px;height:7px;background:#3d2612;border-radius:50% 50% 50% 50%/65% 65% 35% 35%;box-shadow:inset -1px 0 1px rgba(0,0,0,0.5),0 0 3px rgba(0,0,0,0.3);transform:translateX(-50%);animation-name:cc-fall;animation-timing-function:cubic-bezier(.55,0,.85,.35);animation-iteration-count:infinite;}
+@keyframes cc-fall{0%{top:-11px;opacity:0;transform:translateX(-50%) rotate(0deg);}10%{opacity:1;}55%{top:15px;opacity:1;transform:translateX(-50%) rotate(140deg);}64%{top:15px;opacity:0;transform:translateX(-50%) scale(0.5);}100%{top:-11px;opacity:0;}}
+.cc-ripple{position:absolute;left:50%;bottom:9px;width:2px;height:2px;border-radius:50%;transform:translateX(-50%);border:1px solid rgba(240,232,216,0);animation-name:cc-ripple;animation-timing-function:ease-out;animation-iteration-count:infinite;}
+@keyframes cc-ripple{0%,54%{width:2px;height:1px;opacity:0;border-color:rgba(240,232,216,0);}58%{opacity:0.8;border-color:rgba(240,232,216,0.7);}72%{width:16px;height:5px;opacity:0;border-color:rgba(240,232,216,0);}100%{opacity:0;}}
+.cc-steam{position:absolute;top:-9px;left:42%;width:2px;height:9px;background:linear-gradient(180deg,transparent,rgba(240,232,216,0.55),transparent);border-radius:2px;filter:blur(0.5px);animation:cc-steam 2.6s ease-in-out infinite;}
+.cc-steam.s2{left:58%;animation-delay:0.9s;height:7px;}
+@keyframes cc-steam{0%{transform:translateY(0) translateX(0) scaleY(1);opacity:0;}25%{opacity:0.55;}100%{transform:translateY(-15px) translateX(-4px) scaleY(1.5);opacity:0;}}
+.cc-cup-wrap.cc-out .cc-cup{border-color:rgba(224,82,82,0.35);opacity:0.6;}
+.cc-cup-wrap.cc-out .cc-bean{background:#2a1a0c;opacity:0.55;top:15px;animation:none;box-shadow:none;}
 
 .section-label{padding:14px 20px 6px;font-size:10px;color:var(--cream3);letter-spacing:0.18em;text-transform:uppercase;display:flex;align-items:center;gap:8px;}
 .section-label::after{content:'';flex:1;height:1px;background:var(--border);}
@@ -551,7 +604,7 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .origin-section-lbl::before,.origin-section-lbl::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border2),transparent);}
 
 /* Origin cards grid */
-.origin-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;}
+.origin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;}
 .origin-card{position:relative;background:var(--bg2);border:1px solid var(--border);border-radius:11px;padding:12px 14px;transition:all .2s ease;overflow:hidden;}
 .origin-card:hover{border-color:var(--gold2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(0,0,0,0.25);}
 .origin-card.has-out{border-color:rgba(224,82,82,.35);}
@@ -742,36 +795,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 #footer{text-align:center;padding:20px;font-size:9px;color:var(--border2);letter-spacing:0.12em;border-top:1px solid var(--border);margin-top:12px;text-transform:uppercase;}
 .empty{padding:40px 20px;text-align:center;color:var(--cream3);font-size:12px;}
 
-/* ══════════════════════════════════════════════════════
-   INCOMING STOCK — ERP Integration
-══════════════════════════════════════════════════════ */
-.nav-btn.active-incoming{background:rgba(90,144,128,.14);border-color:rgba(90,144,128,.5);color:#7acfbf;}
-.incoming-badge{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#e05252;color:#fff;font-size:9px;font-weight:700;margin-left:4px;vertical-align:middle;flex-shrink:0}
-.incoming-section{margin:0 20px 20px}
-.incoming-card{background:var(--surf);border:1px solid var(--border2);border-radius:12px;margin-bottom:14px;overflow:hidden;animation:fadein 0.3s ease}
-.incoming-card-head{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--bg2);flex-wrap:wrap;gap:10px}
-.incoming-bean-name{font-family:'Playfair Display',serif;font-size:15px;color:var(--cream);font-weight:700}
-.incoming-meta{font-size:10px;color:var(--cream3);margin-top:3px;letter-spacing:0.06em}
-.incoming-weight{font-family:'JetBrains Mono',monospace;font-size:22px;color:var(--green);font-weight:600}
-.incoming-card-body{padding:16px 18px}
-.incoming-match-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.incoming-match-lbl{font-size:10px;color:var(--cream3);text-transform:uppercase;letter-spacing:0.1em;font-weight:600;min-width:110px}
-.incoming-match-val{font-size:12px;color:var(--cream);font-weight:600}
-.warning-alert{background:rgba(232,135,58,.1);border:1px solid rgba(232,135,58,.35);border-radius:8px;padding:12px 16px;margin:12px 0;font-size:11px;color:var(--orange);display:flex;align-items:flex-start;gap:8px;line-height:1.5}
-.warning-alert .warn-icon{font-size:16px;flex-shrink:0;margin-top:1px}
-.conflict-sel{background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--cream);font-size:11px;padding:6px 9px;outline:none;max-width:240px;transition:border 0.15s}
-.conflict-sel:focus{border-color:var(--gold)}
-.conflict-edit{background:var(--bg2);border:1px solid var(--border2);border-radius:6px;color:var(--cream);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 9px;outline:none;width:200px;transition:border 0.15s}
-.conflict-edit:focus{border-color:var(--orange)}
-.incoming-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center}
-.btn-accept{background:rgba(78,200,122,.14);border:1px solid rgba(78,200,122,.4);color:var(--green);padding:8px 18px;border-radius:6px;font-size:11px;font-weight:700;letter-spacing:0.06em;cursor:pointer;transition:all 0.18s}
-.btn-accept:hover{background:rgba(78,200,122,.24)}
-.btn-reject{background:rgba(224,82,82,.08);border:1px solid var(--red-bd);color:var(--red);padding:8px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer}
-.incoming-empty{padding:48px 20px;text-align:center;color:var(--cream3);font-size:12px;line-height:1.7}
-.match-exact{color:var(--green);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
-.match-fuzzy{color:var(--orange);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
-.match-none{color:var(--red);font-size:10px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase}
-
 /* ═══ MANUAL ALERT PANEL ═══════════════════════════════════════════ */
 .manual-alert-panel{margin:12px 20px 0;background:var(--surf);border:1px solid rgba(200,146,60,0.35);border-radius:10px;padding:12px 16px;animation:fadein 0.3s ease;}
 .manual-alert-header{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
@@ -856,7 +879,6 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 
 var fbDB = null;
 var fbRef = null;
-var trRef = null;  // transfer_requests Firebase ref
 var alertsRef = null; // stock_alerts Firebase ref
 
 function initFirebaseAndBoot() {
@@ -873,7 +895,6 @@ function initFirebaseAndBoot() {
         });
     fbDB      = firebase.database(existing);
     fbRef     = fbDB.ref('windmill-stock');
-    trRef     = fbDB.ref('transfer_requests');
     alertsRef = fbDB.ref('stock_alerts');
     bootApp();
   } catch(e) {
@@ -909,7 +930,6 @@ document.getElementById('setupConnectBtn').onclick = function() {
     });
     fbDB      = firebase.database(app);
     fbRef     = fbDB.ref('windmill-stock');
-    trRef     = fbDB.ref('transfer_requests');
     alertsRef = fbDB.ref('stock_alerts');
 
     // Test connection with a quick read
@@ -973,9 +993,6 @@ var S = {
   histPage: 1,          // history pagination: how many pages of 25 to show
   commentUser: '',      // username for comments
   confirmModal: null,   // { title, msg, onOk } — custom confirm dialog
-  // ERP — Incoming Stock from Roastery
-  incomingRequests: [],
-  incomingConflict: {},   // { [reqKey]: { selectedItemId, editedName } }
   showAlertModal: false,
   showSettings: false,
   settingsTab: 'general',      // 'general' | 'alerts' | 'data' | 'about'
@@ -2255,103 +2272,6 @@ document.addEventListener('blur', function() {
    ACTIONS
 ══════════════════════════════════════════════════════ */
 
-/* ══════════════════════════════════════════════════════
-   ERP — FUZZY MATCH & INCOMING STOCK ACTIONS
-══════════════════════════════════════════════════════ */
-function fuzzyMatchItem(beanName) {
-  if(!beanName) return null;
-  var lower = beanName.toLowerCase().trim();
-  // 1. Exact (case-insensitive)
-  var exact = S.items.find(function(i){ return i.name.toLowerCase() === lower; });
-  if(exact) return { item: exact, confidence: 'exact' };
-  // 2. One is substring of the other
-  var sub = S.items.find(function(i){
-    var il = i.name.toLowerCase();
-    return il.includes(lower) || lower.includes(il);
-  });
-  if(sub) return { item: sub, confidence: 'partial' };
-  // 3. Word-overlap score ≥ 0.5
-  var bWords = lower.split(/\s+/).filter(Boolean);
-  var bestMatch = null, bestScore = 0;
-  S.items.forEach(function(i){
-    var iWords = i.name.toLowerCase().split(/\s+/).filter(Boolean);
-    var overlap = bWords.filter(function(w){ return iWords.includes(w); }).length;
-    var score = overlap / Math.max(bWords.length, iWords.length);
-    if(score > bestScore){ bestScore = score; bestMatch = i; }
-  });
-  if(bestScore >= 0.4 && bestMatch) return { item: bestMatch, confidence: 'fuzzy' };
-  return null;
-}
-
-function acceptIncoming(reqKey) {
-  var req = S.incomingRequests.find(function(r){ return r.key === reqKey; });
-  if(!req){ showToast('⚠️ Request not found.'); return; }
-
-  var conflict = S.incomingConflict[reqKey] || {};
-  var targetItemId = conflict.selectedItemId;
-  var displayName  = conflict.editedName || req.bean_name;
-
-  if(!targetItemId) {
-    // Try auto-match one more time
-    var match = fuzzyMatchItem(req.bean_name);
-    if(match) {
-      targetItemId = match.item.id;
-    } else {
-      showToast('⚠️ Please select which item to update from the dropdown.');
-      return;
-    }
-  }
-
-  var item = S.items.find(function(i){ return i.id === targetItemId; });
-  if(!item){ showToast('⚠️ Selected item not found.'); return; }
-  var weight = Number(req.weight) || 0;
-  if(weight <= 0){ showToast('⚠️ Invalid weight in transfer request.'); return; }
-
-  // Log as IN movement
-  logMovement(targetItemId, 'IN', weight, '📦 Roastery Transfer — ' + esc(req.bean_name));
-
-  // Mark transfer request as completed in Firebase
-  if(trRef) {
-    trRef.child(reqKey).update({
-      status: 'completed',
-      completed_ts: new Date().toISOString(),
-      accepted_item_id: String(targetItemId),
-      accepted_item_name: item.name
-    });
-  }
-
-  // Clean up conflict state
-  delete S.incomingConflict[reqKey];
-  showToast('✅ ' + weight + ' ' + (req.unit||'kg') + ' of ' + item.name + ' added to inventory!');
-}
-
-function rejectIncoming(reqKey) {
-  var req = S.incomingRequests.find(function(r){ return r.key === reqKey; });
-  if(!req) return;
-  showConfirm('Reject Transfer', 'Reject transfer of '+req.bean_name+' ('+req.weight+' '+(req.unit||'kg')+')? The roastery will be notified.', function(){
-    if(trRef) {
-      trRef.child(reqKey).update({ status: 'rejected', rejected_ts: new Date().toISOString() });
-    }
-    if(alertsRef) {
-      sendStockAlert({
-        type: 'transfer_rejected',
-        message: '🚫 Transfer rejected: ' + req.bean_name + ' (' + req.weight + ' ' + (req.unit||'kg') + '). Please contact the store for details.'
-      });
-    }
-    showToast('🚫 Transfer request rejected. Roastery notified.');
-  });
-}
-
-function setConflictItem(reqKey, itemId) {
-  if(!S.incomingConflict[reqKey]) S.incomingConflict[reqKey] = {};
-  S.incomingConflict[reqKey].selectedItemId = Number(itemId);
-  render();
-}
-function setConflictName(reqKey, name) {
-  if(!S.incomingConflict[reqKey]) S.incomingConflict[reqKey] = {};
-  S.incomingConflict[reqKey].editedName = name;
-}
-
 function doLogin() {
   var el = document.getElementById('loginInput');
   var val = el ? el.value : '';
@@ -2742,125 +2662,6 @@ function exportMovementsCSV(period) {
 }
 
 /* ══════════════════════════════════════════════════════
-   ERP — RENDER INCOMING STOCK PANEL
-══════════════════════════════════════════════════════ */
-function renderIncoming(h) {
-  var pendingCount = S.incomingRequests.length;
-  h += '<div class="notice view" style="margin:14px 20px 0">📥 <strong>Incoming Stock Inbox</strong> — Transfer requests from the Roastery arrive here in real-time. Review each delivery, resolve any name mismatches, then click Accept to update your inventory.</div>';
-  h += '<div class="incoming-section" style="margin-top:18px">';
-
-  if(pendingCount === 0) {
-    h += '<div class="incoming-empty">✅ Inbox is clear — no pending transfers from the Roastery.<br><span style="font-size:11px;opacity:0.6">New requests appear here automatically in real-time.</span></div>';
-  } else {
-    S.incomingRequests.forEach(function(req) {
-      var match        = fuzzyMatchItem(req.bean_name);
-      var conflict     = S.incomingConflict[req.key] || {};
-      var selectedId   = conflict.selectedItemId || (match ? match.item.id : '');
-      var confidence   = match ? match.confidence : 'none';
-      var needsReview  = (confidence !== 'exact');
-      var ts           = req.ts ? new Date(req.ts).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-
-      h += '<div class="incoming-card">';
-
-      /* ── Card Header ── */
-      h += '<div class="incoming-card-head">';
-      h += '<div>';
-      h += '<div class="incoming-bean-name">🫘 ' + esc(req.bean_name) + '</div>';
-      h += '<div class="incoming-meta">Received: ' + esc(ts) + ' &nbsp;·&nbsp; Roast Level: ' + esc(req.roast_level || '—') + '</div>';
-      h += '</div>';
-      h += '<div class="incoming-weight">' + esc(String(req.weight || 0)) + ' ' + esc(req.unit || 'kg') + '</div>';
-      h += '</div>';
-
-      /* ── Card Body ── */
-      h += '<div class="incoming-card-body">';
-
-      if(confidence === 'exact') {
-        /* Perfect match — show green confirmation */
-        var newBal = match.item.balance + Number(req.weight || 0);
-        h += '<div class="incoming-match-row">';
-        h += '<span class="incoming-match-lbl">Matched Item</span>';
-        h += '<span class="incoming-match-val">' + esc(match.item.name) + '</span>';
-        h += '<span class="match-exact">✓ Exact Match</span>';
-        h += '</div>';
-        h += '<div class="incoming-match-row" style="margin-top:8px">';
-        h += '<span class="incoming-match-lbl">Current Stock</span>';
-        h += '<span class="incoming-match-val">' + match.item.balance + ' ' + esc(match.item.unit) + '</span>';
-        h += '<span style="color:var(--cream3);font-size:10px">→ will become ' + newBal + ' ' + esc(match.item.unit) + '</span>';
-        h += '</div>';
-
-      } else if(confidence === 'partial' || confidence === 'fuzzy') {
-        /* Close but not exact — amber warning */
-        h += '<div class="warning-alert">';
-        h += '<span class="warn-icon">⚠️</span>';
-        h += '<div><strong>Name Mismatch Detected</strong><br>';
-        h += 'Roastery sent: <code style="font-size:11px">' + esc(req.bean_name) + '</code><br>';
-        h += 'Closest match: <code style="font-size:11px">' + esc(match.item.name) + '</code><br>';
-        h += '<span style="opacity:0.75">Please confirm the correct item before accepting.</span></div>';
-        h += '</div>';
-        h += '<div class="incoming-match-row" style="margin-top:6px">';
-        h += '<span class="incoming-match-lbl">Select Item</span>';
-        h += '<select class="conflict-sel" onchange="setConflictItem(\'' + esc(req.key) + '\', this.value)">';
-        h += '<option value="">— Choose inventory item —</option>';
-        S.items.forEach(function(item) {
-          var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
-          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
-        });
-        h += '</select>';
-        h += '<span class="match-fuzzy">⚠ Review Required</span>';
-        h += '</div>';
-
-      } else {
-        /* No match at all — red warning */
-        h += '<div class="warning-alert" style="background:rgba(224,82,82,.08);border-color:var(--red-bd);color:var(--red)">';
-        h += '<span class="warn-icon">🚨</span>';
-        h += '<div><strong>Unknown Bean Name</strong><br>';
-        h += 'Roastery sent: <code style="font-size:11px">' + esc(req.bean_name) + '</code><br>';
-        h += '<span style="opacity:0.75">This name does not match any inventory item. Select the correct one below.</span></div>';
-        h += '</div>';
-        h += '<div class="incoming-match-row" style="margin-top:6px">';
-        h += '<span class="incoming-match-lbl">Select Item</span>';
-        h += '<select class="conflict-sel" onchange="setConflictItem(\'' + esc(req.key) + '\', this.value)">';
-        h += '<option value="">— Choose inventory item —</option>';
-        S.items.forEach(function(item) {
-          var sel = (String(item.id) === String(selectedId)) ? ' selected' : '';
-          h += '<option value="' + item.id + '"' + sel + '>' + esc(item.name) + ' (' + item.balance + ' ' + esc(item.unit) + ')</option>';
-        });
-        h += '</select>';
-        h += '<span class="match-none">✗ No Match Found</span>';
-        h += '</div>';
-      }
-
-      /* Roaster notes */
-      if(req.notes) {
-        h += '<div class="incoming-match-row" style="margin-top:10px">';
-        h += '<span class="incoming-match-lbl">Roaster Notes</span>';
-        h += '<span class="incoming-match-val" style="color:var(--cream3)">' + esc(req.notes) + '</span>';
-        h += '</div>';
-      }
-
-      /* Action buttons */
-      var canAccept = (confidence === 'exact') || !!selectedId;
-      h += '<div class="incoming-actions">';
-      h += '<button class="btn-accept"'
-        + (canAccept ? '' : ' disabled style="opacity:0.4;cursor:not-allowed"')
-        + ' onclick="acceptIncoming(\'' + esc(req.key) + '\')">'
-        + '✅ Accept &amp; Add to Inventory</button>';
-      h += '<button class="btn-reject" onclick="rejectIncoming(\'' + esc(req.key) + '\')">✕ Reject</button>';
-      if(needsReview && !selectedId) {
-        h += '<span style="font-size:10px;color:var(--orange)">← Select an item above to enable Accept</span>';
-      }
-      h += '</div>'; /* incoming-actions */
-
-      h += '</div>'; /* card-body */
-      h += '</div>'; /* incoming-card */
-    });
-  }
-
-  h += '</div>'; /* incoming-section */
-  return h;
-}
-
-/* ══════════════════════════════════════════════════════
    SVG SPARKLINE — renders a tiny closing-stock line chart
    for the Reports section.
 ══════════════════════════════════════════════════════ */
@@ -2942,7 +2743,7 @@ function render() {
 
   /* OVERLAY: Login */
   if(S.showLogin) {
-    h += '<div id="overlay" class="right-pos"><div class="modal"><div class="modal-hdr"><div class="modal-icon">🔒</div>'
+    h += '<div id="overlay"><div class="modal"><div class="modal-hdr"><div class="modal-icon">🔒</div>'
       +'<div><div class="modal-title">Team Access</div><div class="modal-sub">Enter your team password to continue</div></div></div>'
       +'<div class="modal-body">'
       +'<div class="'+(S.loginShake?'shake':'')+'"><label style="display:block;font-size:9px;color:var(--cream3);margin-bottom:6px;letter-spacing:0.12em;text-transform:uppercase;font-weight:600">Password</label>'
@@ -3047,11 +2848,6 @@ function render() {
     +'<button class="nav-btn'+(S.view==='balance'?' active-bal':'')+'" id="navBal">⚖️ Balance</button>'
     +'<button class="nav-btn'+(S.view==='report'?' active-rpt':'')+'" id="navRpt">📊 Reports</button>'
     +(function(){ var lowCount = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)!=='OK'; }).length; return '<button class="nav-btn'+(S.view==='provision'?' active-prov':'')+'" id="navProv">📋 Provisioning'+(lowCount?' <span style="background:var(--red);color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;margin-left:3px">'+lowCount+'</span>':'')+'</button>'; })()
-    +(function(){
-      var iCount = S.incomingRequests ? S.incomingRequests.length : 0;
-      var badge = iCount > 0 ? '<span class="incoming-badge">'+iCount+'</span>' : '';
-      return '<button class="nav-btn'+(S.view==='incoming'?' active-incoming':'')+'" id="navIncoming">📥 Incoming'+badge+'</button>';
-    })()
     +'<button class="nav-btn '+(S.teamUnlocked?'active-team':'locked-team')+'" id="navTeam">'+(S.teamUnlocked?'✏️':'🔒')+' Team Panel</button>'
     +'</div>'
     +'<div class="h-right">'
@@ -3170,10 +2966,18 @@ function render() {
         var st = getStatus(item.balance, item.threshold), m = SM[st];
         var pct = Math.min(100, Math.round((item.balance/Math.max(item.threshold*4,1))*100));
         var tIn = todayMoves(item.id,'IN'), tOut = todayMoves(item.id,'OUT');
-        h += '<div class="card'+(S.flashId===item.id?' flash':'')+'" data-id="'+item.id+'" style="border-color:'+(st==='OK'?'var(--border2)':st==='LOW'?'var(--orng-bd)':'var(--red-bd)')+'">'
+        // Animated coffee cup — liquid height mirrors stock %, bean-drop speed reflects how fast it's depleting
+        var ccFallDur = st==='LOW' ? '0.85s' : st==='OK' ? '2.4s' : '1.5s';
+        var cupHtml = '<div class="cc-cup-wrap'+(st==='OUT'?' cc-out':'')+'" title="'+pct+'% of max level">'
+          +'<div class="cc-cup"><div class="cc-liquid" style="height:'+pct+'%"></div>'
+          +(st!=='OUT' ? '<div class="cc-bean" style="animation-duration:'+ccFallDur+'"></div><div class="cc-ripple" style="animation-duration:'+ccFallDur+'"></div>' : '<div class="cc-bean"></div>')
+          +'</div><div class="cc-saucer"></div>'
+          +(st==='OK' ? '<div class="cc-steam"></div><div class="cc-steam s2"></div>' : '')
+          +'</div>';
+        h += '<div class="card card-glass st-'+st.toLowerCase()+(S.flashId===item.id?' flash':'')+'" data-id="'+item.id+'" style="border-color:'+(st==='OK'?'var(--border2)':st==='LOW'?'var(--orng-bd)':'var(--red-bd)')+'">'
           +'<div class="card-top"><div><div class="card-name">'+esc(item.name)+'</div>'
           +'<div class="card-cat">'+esc(item.category)+' · '+esc(item.origin)+'</div></div>'
-          +'<span class="badge '+m.cls+'">'+m.lbl+'</span></div>'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="badge '+m.cls+'">'+m.lbl+'</span>'+cupHtml+'</div></div>'
           +'<div class="card-qty"><span class="card-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+'</span><span class="card-unit">'+esc(item.unit)+'</span></div>'
           +'<div class="card-moves"><span class="move-in">'+(tIn>0?'📥 +'+tIn+' today':'—')+'</span><span class="move-out">'+(tOut>0?'📤 -'+tOut+' today':'—')+'</span></div>'
           +'<div class="bar-wrap"><div class="bar-fill" style="width:'+pct+'%;background:'+m.color+'"></div></div>'
@@ -3186,7 +2990,8 @@ function render() {
 
     /* (Recent Movements panel was here — moved to bottom of dashboard, after Team Updates.) */
 
-    /* ── 📈 Usage Insights — Origin-by-Origin ──────────── */
+    /* ── 📈 Usage Insights — Origin-by-Origin ──────────── (removed per user request) */
+    /*
     var todOut7  = Math.round(usageTotalOut(7) * 10)/10;
     var todOut30 = Math.round(usageTotalOut(30) * 10)/10;
     var topMov   = usageTopMovers(7, 5);
@@ -3282,6 +3087,7 @@ function render() {
       +'</div>'
       +'</div>'
       +'</div>';
+    */
 
     /* (Team Updates section removed per user request.) */
 
@@ -3502,9 +3308,7 @@ function render() {
   }
 
   /* ── PROVISIONING ── */
-  if(S.view === 'incoming') {
-    h = renderIncoming(h);
-  } else if(S.view === 'provision') {
+  if(S.view === 'provision') {
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
     var outItems  = needItems.filter(function(i){ return i.balance === 0; });
     var lowItems  = needItems.filter(function(i){ return i.balance > 0; });
@@ -4189,7 +3993,6 @@ function bindEvents() {
   var nb=g('navBal');  if(nb) nb.onclick=function(){ S.view='balance'; render(); };
   var nr=g('navRpt');  if(nr) nr.onclick=function(){ S.view='report'; if(!S.rptFrom){ var dr=defaultDateRange(); S.rptFrom=dr.from; S.rptTo=dr.to; } render(); };
   var np=g('navProv'); if(np) np.onclick=function(){ S.view='provision'; render(); };
-  var ni=g('navIncoming'); if(ni) ni.onclick=function(){ S.view='incoming'; render(); };
   var nt=g('navTeam'); if(nt) nt.onclick=function(){
     if(S.teamUnlocked){ S.view='team'; S.histPage=1; render(); }
     else { S.showLogin=true; render(); setTimeout(function(){ var e=g('loginInput'); if(e)e.focus(); },60); }
@@ -4906,17 +4709,6 @@ function bootApp() {
       if(!d) return;
       applyRemoteData(d, true);
     });
-
-    /* ERP — listen for incoming stock requests from the Roastery */
-    if(trRef) {
-      trRef.on('value', function(snap) {
-        var trData = snap.val() || {};
-        S.incomingRequests = Object.keys(trData).map(function(k) {
-          return Object.assign({}, trData[k], { key: k });
-        }).filter(function(r) { return r.status === 'pending'; });
-        render();
-      });
-    }
   });
 }
 </script>
