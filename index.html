@@ -192,6 +192,12 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
 .prov-all-ok{padding:48px 20px;text-align:center;color:var(--green);font-size:13px;}
 .btn-clrhist{background:rgba(224,82,82,0.1);border:1px solid var(--red-bd);color:var(--red);padding:7px 14px;border-radius:6px;font-size:10px;font-weight:700;letter-spacing:0.06em;}
 .btn-del-entry{background:rgba(224,82,82,0.08);border:1px solid var(--red-bd);color:var(--red);padding:3px 7px;border-radius:4px;font-size:11px;flex-shrink:0;}
+/* FIX #15: .btn-reverse had no style */
+.btn-edit-item{background:rgba(80,144,216,0.08);border:1px solid rgba(80,144,216,0.35);color:var(--blue);padding:3px 8px;border-radius:4px;font-size:12px;cursor:pointer;}
+.btn-reverse{background:rgba(80,144,216,0.08);border:1px solid rgba(80,144,216,0.35);color:var(--blue);padding:3px 7px;border-radius:4px;font-size:11px;flex-shrink:0;cursor:pointer;}
+.btn-reverse:hover:not([disabled]){background:rgba(80,144,216,0.18);}
+.btn-reverse[disabled]{opacity:0.3;cursor:not-allowed;}
+.rev-tag{display:inline-block;font-size:9px;font-weight:700;letter-spacing:0.06em;color:var(--blue);border:1px solid rgba(80,144,216,0.35);border-radius:3px;padding:0 4px;font-style:normal;}
 .h-right{display:flex;align-items:center;gap:8px;}
 .live-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
 .live-txt{font-size:10px;font-weight:600;letter-spacing:0.08em;}
@@ -754,6 +760,32 @@ body::after{content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;o
   .snap-row{grid-template-columns:1.2fr 1fr 1fr;font-size:10px;}
   .snap-row .snap-hide-sm{display:none;}
 }
+/* ── FIX: phone layout ─────────────────────────────────────────
+   • header buttons wrapped (⚙ Settings was pushed off-screen)
+   • Team Panel rows stacked into cards (IN / OUT / edit / delete
+     buttons were hidden to the right of the screen)
+   • movement rows wrap so product names aren't cut to 1 letter   */
+@media (max-width:640px){
+  #header{padding:12px 16px;}
+  .h-right{flex-wrap:wrap;width:100%;gap:6px;}
+  .h-nav{flex-wrap:wrap;}
+  .metrics{flex-wrap:wrap;}
+  .team-table-wrap{margin:12px 16px;overflow-x:visible;}
+  .team-hdr-row{display:none !important;}
+  .team-item-row{grid-template-columns:1fr 1fr 1fr !important;min-width:0 !important;gap:8px 10px;padding:12px;}
+  .team-item-row > .ti-name{grid-column:1 / -1;}
+  .team-item-row > .ti-act{grid-column:1 / -1;justify-content:flex-start !important;}
+  .team-item-row > .ti-st{text-align:left !important;}
+  .team-item-row > span:nth-child(2){justify-content:flex-start !important;text-align:left !important;}
+  .team-item-row > .ti-in, .team-item-row > .ti-out{text-align:left !important;}
+  .team-item-row > .ti-in::before{content:'In today ';color:var(--cream3);font-size:9px;font-family:'Barlow Condensed',sans-serif;}
+  .team-item-row > .ti-out::before{content:'Out today ';color:var(--cream3);font-size:9px;font-family:'Barlow Condensed',sans-serif;}
+  .team-item-row .ti-act button{padding:7px 12px;font-size:12px;}
+  .hist-row{flex-wrap:wrap;gap:4px 10px;padding:8px 12px;}
+  .hist-row .hist-name{flex:1 1 45%;}
+  .hist-row .hist-note{flex:1 1 100%;order:9;white-space:normal;}
+  .form-row{flex-wrap:wrap;}
+}
 
 /* ── Activity Filter bar ── */
 .actf-bar{margin:6px 20px 10px;background:var(--surf);border:1px solid var(--border2);border-radius:10px;padding:10px 12px;animation:fadein 0.25s ease;}
@@ -1002,6 +1034,7 @@ function initFirebaseAndBoot() {
     fbDB      = firebase.database(existing);
     fbRef     = fbDB.ref('windmill-stock');
     alertsRef = fbDB.ref('stock_alerts');
+    initNetworkWatch();
     bootApp();
   } catch(e) {
     console.error('Firebase init failed:', e);
@@ -1029,7 +1062,14 @@ document.getElementById('setupConnectBtn').onclick = function() {
   errEl.textContent = 'Connecting…';
 
   try {
-    // Initialise Firebase
+    // Initialise Firebase — FIX #15: the app is already initialised from the
+    // built-in config, so a second initializeApp() threw "already exists".
+    // Use a separately named app for a manually entered config.
+    if (firebase.apps && firebase.apps.length && fbRef) {
+      document.getElementById('setup-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      return;
+    }
     var app = firebase.initializeApp({
       apiKey: apikey,
       authDomain: projectid + '.firebaseapp.com',
@@ -1055,6 +1095,77 @@ document.getElementById('setupConnectBtn').onclick = function() {
     errEl.textContent = 'Error: ' + (e.message || 'Invalid config.');
   }
 };
+
+/* ══════════════════════════════════════════════════════
+   FIX: OFFLINE / UNSAVED-CHANGES INDICATOR
+   Firebase keeps changes made offline and sends them when the
+   connection comes back — but they are LOST if the tab is closed
+   first. We now count writes that the server hasn't confirmed yet,
+   show a banner while offline or waiting, and warn before the tab
+   is closed with unsaved changes.
+══════════════════════════════════════════════════════ */
+var _net = { online: true, pending: 0, watched: false };
+function _netBanner() {
+  var el = document.getElementById('net-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'net-banner';
+    el.style.cssText = 'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:9500;padding:8px 14px;border-radius:8px;font:600 12px/1.4 system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.45);max-width:calc(100% - 32px);text-align:center;display:none';
+    document.body.appendChild(el);
+  }
+  if (!_net.online) {
+    el.style.display = 'block'; el.style.background = '#7a1f1f'; el.style.color = '#fff';
+    el.textContent = '📴 Offline' + (_net.pending ? ' — ' + _net.pending + ' change' + (_net.pending===1?'':'s') + ' waiting to sync. Keep this tab open.' : ' — changes will sync when the connection is back.');
+  } else if (_net.pending > 0 && _net.slow) {
+    el.style.display = 'block'; el.style.background = '#6b4b12'; el.style.color = '#fff';
+    el.textContent = '⏳ Saving ' + _net.pending + ' change' + (_net.pending===1?'':'s') + '…';
+  } else {
+    el.style.display = 'none';
+  }
+}
+function _trackWrite(p) {
+  if (!p || typeof p.then !== 'function') return p;
+  _net.pending++;
+  var started = Date.now();
+  setTimeout(function(){ if (_net.pending > 0 && Date.now() - started >= 1500) { _net.slow = true; _netBanner(); } }, 1600);
+  var done = function(){ _net.pending = Math.max(0, _net.pending - 1); if (!_net.pending) _net.slow = false; _netBanner(); };
+  p.then(done, done);
+  return p;
+}
+function initNetworkWatch() {
+  if (_net.watched) return;
+  _net.watched = true;
+  try {
+    var RP = firebase.database.Reference && firebase.database.Reference.prototype;
+    if (RP && !RP.__wcTracked) {
+      ['set','update','remove','transaction'].forEach(function(m){
+        var orig = RP[m];
+        if (typeof orig !== 'function') return;
+        RP[m] = function(){ return _trackWrite(orig.apply(this, arguments)); };
+      });
+      var origPush = RP.push;
+      if (typeof origPush === 'function') RP.push = function(){ var r = origPush.apply(this, arguments); if (arguments.length) _trackWrite(r); return r; };
+      RP.__wcTracked = true;
+    }
+  } catch(e) { console.warn('[windmill] write tracking unavailable', e); }
+  try {
+    // Firebase reports "not connected" for a moment at start-up — ignore that,
+    // and ignore very short drops (< 2 s).
+    var dropTimer = null;
+    fbDB.ref('.info/connected').on('value', function(snap){
+      if (snap.val() === true) {
+        _net.everConnected = true; _net.online = true;
+        if (dropTimer) { clearTimeout(dropTimer); dropTimer = null; }
+        _netBanner();
+      } else if (_net.everConnected && !dropTimer) {
+        dropTimer = setTimeout(function(){ dropTimer = null; _net.online = false; _netBanner(); }, 2000);
+      }
+    });
+  } catch(e) {}
+  window.addEventListener('beforeunload', function(e){
+    if (_net.pending > 0) { e.preventDefault(); e.returnValue = 'Some stock changes have not been saved yet.'; return e.returnValue; }
+  });
+}
 
 // Boot on load — safe for any script-load timing
 if(document.readyState === "loading") {
@@ -1089,6 +1200,7 @@ var S = {
   pendingUpdate:false,
   logModal:null, logType:'IN', logQty:'', logNote:'', logErr:'',
   showAddItem:false, newItem:null,
+  editItem:null,        // { id, name, category, origin, unit, threshold } while editing an item
   showCPwd:false, cpOld:'', cpNew:'', cpConf:'', cpErr:'',
   toast:null, toastTimer:null,
   // Reports
@@ -1099,6 +1211,7 @@ var S = {
   tpFilterCat: 'All', tpFilterStatus: 'All', tpFilterSearch: '',
   editBalId: null, editBalVal: '', openCommentId: null,
   dashSort: 'name',
+  tpSort: 'name',       // FIX: Team Panel has its own sort (was shared with the dashboard)
   histPage: 1,          // history pagination: how many pages of 25 to show
   commentUser: '',      // username for comments
   confirmModal: null,   // { title, msg, onOk } — custom confirm dialog
@@ -1149,6 +1262,9 @@ var S = {
   /* ── Data Portability ───────────────────────── */
   importBusy: false,
 
+  /* Shared settings (stored in Firebase windmill-stock/settings, same on every device) */
+  shared: {},          // { timeZone, snoozeMinutes }
+
   theme: (function(){ try { return localStorage.getItem('wc-theme') || 'dark'; } catch(e) { return 'dark'; } })(),
   accentPreset: (function(){ try { return localStorage.getItem('wc-accent') || ''; } catch(e) { return ''; } })()
 };
@@ -1191,11 +1307,20 @@ function resetAccent() {
 }
 
 function fmtClock() {
-  var now = new Date();
-  var h = String(now.getHours()).padStart(2,'0');
-  var m = String(now.getMinutes()).padStart(2,'0');
-  var s = String(now.getSeconds()).padStart(2,'0');
-  return { hm: h+':'+m, s: s, date: now.toLocaleDateString([],{weekday:'long',year:'numeric',month:'long',day:'numeric'}) };
+  // Clock shows BUSINESS time (same on every device)
+  var now = new Date(), tz = (typeof bizTz === 'function') ? bizTz() : undefined, parts = {};
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour:'2-digit', minute:'2-digit', second:'2-digit', hourCycle:'h23' })
+      .formatToParts(now).forEach(function(p){ parts[p.type] = p.value; });
+  } catch(e) { parts = { hour: String(now.getHours()).padStart(2,'0'), minute: String(now.getMinutes()).padStart(2,'0'), second: String(now.getSeconds()).padStart(2,'0') }; }
+  var date;
+  try { date = now.toLocaleDateString([], {weekday:'long',year:'numeric',month:'long',day:'numeric', timeZone: tz}); }
+  catch(e) { date = now.toLocaleDateString(); }
+  return { hm: parts.hour+':'+parts.minute, s: parts.second, date: date };
+}
+function fmtHM(ts) {
+  try { return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', timeZone: bizTz()}); }
+  catch(e) { return new Date(ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1205,7 +1330,7 @@ function isBusy() {
   // Any modal open
   if(S.showLogin || S.showSettingsLogin || S.logModal !== null || S.confirmModal !== null) return true;
   // Any inline form active
-  if(S.showAddItem || S.showCPwd) return true;
+  if(S.showAddItem || S.showCPwd || S.editItem) return true;
   // Any input/textarea has focus
   var a = document.activeElement;
   if(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT')) return true;
@@ -1219,39 +1344,107 @@ function showConfirm(title, msg, onOk) {
   S.confirmModal = { title: title, msg: msg, onOk: onOk };
   render();
 }
-function getStatus(bal, thr) { return bal === 0 ? 'OUT' : bal < thr ? 'LOW' : 'OK'; }
+/* ── Number helpers (FIX #4: floating-point drift) ─────────────
+   Quantities use 0.01 steps; round every stored/displayed value to
+   2 decimals so 0.1+0.2 never shows as 0.30000000000000004.      */
+/* CALC: exact half-up rounding to 2 decimals. The plain
+   Math.round(n*100)/100 turns 1.005 into 1.00 (1.005*100 = 100.4999…). */
+function r2(n) {
+  n = Number(n) || 0;
+  if (!isFinite(n)) return 0;
+  var a = Math.abs(n), str = String(a);
+  var v = str.indexOf('e') >= 0 ? Math.round(a * 100) / 100 : Number(Math.round(Number(str + 'e2')) + 'e-2');
+  return (n < 0 && v !== 0) ? -v : v;   // never "-0"
+}
+/* whole cents of a 2-decimal value */
+function cents(n) { return Math.round(r2(n) * 100); }
+
+/* Signed stock change of a history entry (FIX #1).
+   IN → +qty. OUT / WASTE / ADJ → −qty.
+   ADJ qty is stored as the amount REMOVED, so a manual edit that
+   INCREASES stock is stored as a NEGATIVE qty (e.g. 10 → 50 = −40). */
+function stockDelta(e) {
+  var q = Number(e && e.qty) || 0;
+  if (!e) return 0;
+  if (e.type === 'IN') return q;
+  if (e.type === 'OUT' || e.type === 'WASTE' || e.type === 'ADJ') return -q;
+  return 0;   // CALC: unknown types are ignored everywhere (ledger AND balance walk)
+}
+/* Unit of an item (FIX #15: no hard-coded "kg") */
+function unitFor(itemId, fallback) {
+  var it = S.items.find(function(i){ return Number(i.id) === Number(itemId); });
+  return (it && it.unit) ? it.unit : (fallback || 'kg');
+}
+function isKgUnit(u) { return !u || String(u).trim().toLowerCase() === 'kg'; }
+/* Total on hand across kg items only (mixed units can't be summed) */
+function totalKgOnHand() {
+  return r2(S.items.reduce(function(s,i){ return isKgUnit(i.unit) ? s + (Number(i.balance)||0) : s; }, 0));
+}
+function nonKgItemCount() {
+  return S.items.filter(function(i){ return !isKgUnit(i.unit); }).length;
+}
+function fmtMove(e) {
+  var d = stockDelta(e);
+  return (d >= 0 ? '+' : '−') + r2(Math.abs(d)) + ' ' + esc(unitFor(e.itemId));
+}
+/* Icon + qty cells for a movement row */
+function movIconQty(e) {
+  var up = stockDelta(e) >= 0;
+  var icons = {IN:'📥', OUT:'📤', WASTE:'🗑', ADJ:'✏️'};
+  return '<span class="'+(up?'hist-type-in':'hist-type-out')+'" title="'+esc(e.type)+'">'+(icons[e.type]||'•')+'</span>'
+    +'<span class="hist-qty" style="color:'+(up?'var(--green)':'var(--red)')+'">'+fmtMove(e)+'</span>';
+}
+/* ONE provisioning formula used everywhere (FIX #5):
+   cover the deficit + 14 days of average usage, never less than 2× min.
+   With no usage history: deficit + one min level.                    */
+function suggestedOrder(item) {
+  /* CALC: whole-cent integers — 30 − 12.3 is 17.699999… in floating point,
+     so ceil(deficit + 14 days) could come out 1 kg too high. */
+  var thrC = cents(item.threshold), balC = cents(item.balance);
+  var defC = Math.max(0, thrC - balC);
+  var dailyC = cents(avgDailyUsage(item.id));
+  var baseC = dailyC > 0 ? Math.ceil((defC + dailyC * 14) / 100) * 100 : defC + thrC;
+  return Math.max(thrC * 2, baseC) / 100;
+}
+
+/* AUDIT: history ids were Date.now(). Two devices saving in the same
+   millisecond produced the SAME id → the second write overwrote the first
+   in history/<id> and a stock movement silently vanished. Ids now carry
+   3 random digits (still a number, still roughly time-ordered). */
+var _lastEntryId = 0;
+function newEntryId() {
+  var id = Date.now() * 1000 + Math.floor(Math.random() * 1000);
+  if (id <= _lastEntryId) id = _lastEntryId + 1;   // strictly increasing on this device
+  _lastEntryId = id;
+  return id;
+}
+/* A reversed entry and its reversal cancel out. Usage statistics
+   (Out Today, averages, totals) skip both; the ledger keeps both. */
+function isVoided(e) { return !!(e && (e.reversedBy || e.reversalOf)); }
+
+function getStatus(bal, thr) { bal = r2(bal); return bal <= 0 ? 'OUT' : bal < thr ? 'LOW' : 'OK'; }
 
 /* Severity tier — classifies how serious a low-stock event is.
    CRITICAL: balance is 0 (OUT) OR below criticalThreshold * min
    WARNING:  balance < min but above critical band
    OK:       at or above min                                       */
 function getSeverity(bal, thr) {
-  if (bal === 0) return 'CRITICAL';
-  var critBand = thr * (S.alertPrefs && S.alertPrefs.criticalThreshold || 0.5);
-  if (bal <= critBand) return 'CRITICAL';
+  if (r2(bal) <= 0) return 'CRITICAL';
+  var critBand = r2(thr * (S.alertPrefs && S.alertPrefs.criticalThreshold || 0.5));
+  if (r2(bal) <= critBand) return 'CRITICAL';
   if (bal < thr) return 'WARNING';
   return 'OK';
 }
 
 /* Estimate days until stock-out based on average daily outflow over last 14 days */
+/* FIX #6: uses the SAME average as Provisioning (avgDailyUsage) so
+   "days left" is identical everywhere in the app. */
 function estimateDaysLeft(itemId, currentBal) {
-  if (currentBal <= 0) return 0;
-  var cutoff = Date.now() - 14*24*60*60*1000;
-  var totalOut = 0, daysWithOut = 0, dayMap = {};
-  S.history.forEach(function(e){
-    if (Number(e.itemId) !== Number(itemId)) return;
-    if (e.type !== 'OUT' && e.type !== 'WASTE') return;
-    var ts = new Date(e.ts).getTime();
-    if (ts < cutoff) return;
-    var dKey = new Date(e.ts).toDateString();
-    if (!dayMap[dKey]) { dayMap[dKey] = 0; daysWithOut++; }
-    dayMap[dKey] += Number(e.qty)||0;
-    totalOut += Number(e.qty)||0;
-  });
-  if (totalOut === 0 || daysWithOut === 0) return null;
-  var avgDaily = totalOut / Math.max(daysWithOut, 7);  // smooth over min 7 days
-  if (avgDaily <= 0) return null;
-  return Math.max(0, Math.round(currentBal / avgDaily));
+  if (r2(currentBal) <= 0) return 0;
+  var avgC = cents(avgDailyUsage(itemId));
+  if (avgC <= 0) return null;
+  // CALC: integer cents — 10.2 / 0.34 is 29.999… in floating point (should be 30)
+  return Math.max(0, Math.floor(cents(currentBal) / avgC));
 }
 
 var SM = {
@@ -1260,7 +1453,46 @@ var SM = {
   OUT: {lbl:'OUT',      cls:'badge-out', color:'var(--red)',    bar:'var(--red)'}
 };
 function esc(s) { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function todayStr() { return new Date().toDateString(); }
+/* ── Business time zone (FIX: devices in different time zones) ─────
+   "Today", day groups, report days and snapshot days used each DEVICE's
+   own clock zone, so a phone set to another zone put late-evening
+   movements on a different day. All day calculations now use ONE shared
+   business time zone (Settings → General, stored in Firebase). */
+function deviceTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch(e) { return 'UTC'; } }
+function bizTz() { return (S.shared && S.shared.timeZone) || deviceTz(); }
+var _dayFmtCache = {};
+function _dayFmt(tz) {
+  if (!_dayFmtCache[tz]) {
+    try { _dayFmtCache[tz] = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit' }); }
+    catch(e) { _dayFmtCache[tz] = new Intl.DateTimeFormat('en-CA', { year:'numeric', month:'2-digit', day:'2-digit' }); }
+  }
+  return _dayFmtCache[tz];
+}
+/* 'YYYY-MM-DD' of a timestamp in the business time zone */
+var _dkCache = {}, _dkTz = null, _dkSize = 0;
+function dayKey(t) {
+  var d = (t instanceof Date) ? t : new Date(t == null ? Date.now() : t);
+  var ms = d.getTime();
+  if (isNaN(ms)) return '';
+  var tz = bizTz();
+  if (tz !== _dkTz || _dkSize > 20000) { _dkCache = {}; _dkTz = tz; _dkSize = 0; }
+  var slot = Math.floor(ms / 60000);            // PERF: cache per minute
+  var hit = _dkCache[slot];
+  if (hit) return hit;
+  var parts = _dayFmt(tz).formatToParts(d), o = {};
+  parts.forEach(function(p){ o[p.type] = p.value; });
+  _dkSize++;
+  return (_dkCache[slot] = o.year + '-' + o.month + '-' + o.day);
+}
+function todayKey() { return dayKey(Date.now()); }
+function yesterdayKey() {
+  var k = todayKey(), d = new Date(k + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+function addDaysKey(k, n) { var d = new Date(k + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+/* Human label for a day key (no time-zone shift) */
+function dayKeyLabel(k, opts) { return new Date(k + 'T12:00:00Z').toLocaleDateString([], Object.assign({ timeZone: 'UTC' }, opts || {})); }
+function todayStr() { return todayKey(); }
 function fmtTime(d) { return d ? d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '—'; }
 function fmtDate(d) { return d ? d.toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'}) : '—'; }
 
@@ -1297,9 +1529,7 @@ function tuAuthorInitial(name) {
 /* ── Period helpers for Recent Movements ─────────── */
 function periodCutoff(period) {
   var now = new Date();
-  if (period === 'today') {
-    var t = new Date(); t.setHours(0,0,0,0); return t.getTime();
-  }
+  if (period === 'today') return 0;   // handled by day key (business time zone)
   if (period === 'week') {
     return now.getTime() - 7*24*60*60*1000;
   }
@@ -1313,15 +1543,16 @@ function periodLabel(p) {
 }
 function filteredMovements() {
   var cutoff = periodCutoff(S.movPeriod);
+  var tk = S.movPeriod === 'today' ? todayKey() : null;
   var search = (S.movSearch || '').toLowerCase().trim();
   var typeF = S.movTypeFilter;
   return S.history.filter(function(e){
     var ts = new Date(e.ts).getTime();
+    if (tk && dayKey(ts) !== tk) return false;
     if (cutoff && ts < cutoff) return false;
     if (typeF !== 'All' && e.type !== typeF) {
-      // 'OUT' filter should also include WASTE/ADJ-out
-      if (typeF === 'OUT' && (e.type==='WASTE')) { /* keep */ }
-      else if (typeF === 'IN' && e.type === 'IN') { /* keep */ }
+      // 'OUT' filter also includes WASTE (same definition as "Out Today")
+      if (typeF === 'OUT' && e.type === 'WASTE') { /* keep */ }
       else return false;
     }
     if (search) {
@@ -1336,16 +1567,19 @@ function filteredMovements() {
 function groupByDay(movs) {
   var groups = {};
   movs.forEach(function(e){
-    var d = new Date(e.ts);
-    var key = d.toDateString();
-    if (!groups[key]) groups[key] = { key:key, date:d, items:[], totalIn:0, totalOut:0 };
+    var key = dayKey(e.ts);
+    if (!groups[key]) groups[key] = { key:key, date:new Date(key+'T12:00:00Z'), items:[], totalIn:0, totalOut:0, net:0 };
     groups[key].items.push(e);
     var q = Number(e.qty)||0;
-    if (e.type === 'IN') groups[key].totalIn += q;
-    else groups[key].totalOut += q;
+    // FIX #6: OUT = OUT + WASTE everywhere; ADJ only affects net
+    if (!isVoided(e)) {
+      if (e.type === 'IN') groups[key].totalIn = r2(groups[key].totalIn + q);
+      else if (e.type === 'OUT' || e.type === 'WASTE') groups[key].totalOut = r2(groups[key].totalOut + q);
+    }
+    groups[key].net = r2(groups[key].net + stockDelta(e));
   });
   // Return sorted desc by date
-  return Object.values(groups).sort(function(a,b){ return b.date.getTime() - a.date.getTime(); });
+  return Object.values(groups).sort(function(a,b){ return a.key < b.key ? 1 : a.key > b.key ? -1 : 0; });
 }
 
 /* ── Alert preferences storage ─────────────────────── */
@@ -1411,15 +1645,30 @@ function fireDesktopNotif(title, body) {
     new Notification(title, { body: body, icon: '', tag: 'windmill-stock' });
   } catch(e) {}
 }
+function _liveItemIds() {
+  var m = {}; S.items.forEach(function(i){ m[String(Number(i.id))] = true; }); return m;
+}
+/* PERF: todayMoves() is called for every card / row on every render and
+   scanned the whole history each time. Results are now cached until the
+   history, the item list or the day changes. */
+var _tmCache = { h:null, i:null, k:'', m:{} };
 function todayMoves(itemId, type) {
   var tod = todayStr();
+  if (_tmCache.h !== S.history || _tmCache.i !== S.items || _tmCache.k !== tod) _tmCache = { h:S.history, i:S.items, k:tod, m:{} };
+  var ck = (itemId||'all') + '|' + (type||'');
+  if (_tmCache.m[ck] !== undefined) return _tmCache.m[ck];
+  return (_tmCache.m[ck] = _todayMovesRaw(itemId, type, tod));
+}
+function _todayMovesRaw(itemId, type, tod) {
   return S.history.filter(function(e) {
     /* Use == not === and Number() to handle Firebase string/number coercion */
-    var itemMatch = !itemId || Number(e.itemId) === Number(itemId);
-    var typeMatch = !type || e.type === type;
-    var dateMatch = new Date(e.ts).toDateString() === tod;
+    var itemMatch = itemId ? Number(e.itemId) === Number(itemId) : _liveItemIds()[String(Number(e.itemId))];
+    if (isVoided(e)) return false;   // AUDIT: a reversed OUT is not "used today"
+    /* FIX #6: "OUT" = everything used/sold, i.e. OUT + WASTE */
+    var typeMatch = !type || e.type === type || (type === 'OUT' && e.type === 'WASTE');
+    var dateMatch = dayKey(e.ts) === tod;
     return dateMatch && itemMatch && typeMatch;
-  }).reduce(function(s, e) { return s + Number(e.qty); }, 0);
+  }).reduce(function(s, e) { return r2(s + Number(e.qty)); }, 0);
 }
 function showToast(msg, dur) {
   if(S.toastTimer) clearTimeout(S.toastTimer);
@@ -1432,132 +1681,172 @@ function showToast(msg, dur) {
    Returns array of day rows: { date, open, in, out, waste, adj, close }
    Carries forward closing → next day opening automatically.
 ══════════════════════════════════════════════════════ */
-function buildDailyLedger(itemId, fromDate, toDate) {
-  // Filter history for this item in range, oldest first
-  var entries = S.history.filter(function(e){
-    var d = new Date(e.ts);
-    var match = !itemId || Number(e.itemId) === Number(itemId);
-    return match && d >= fromDate && d <= toDate;
-  }).slice().sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
+/* FIX #1/#6: one shared ledger core.
+   • ADJ is signed (stockDelta) — a manual increase no longer shows as a decrease.
+   • "All Products" only uses history of items that still exist, so the
+     opening balance matches the current total.
+   • Every value is rounded to 2 decimals.                                    */
+/* fromDate / toDate may be 'YYYY-MM-DD' keys or Date objects;
+   days are compared in the business time zone. */
+function _toKey(x) { return typeof x === 'string' ? x.slice(0,10) : dayKey(x); }
+function _ledgerCore(idSet, fromDate, toDate, histSrc) {
+  function inSet(id) { return !!idSet[String(Number(id))]; }
+  var fromK = _toKey(fromDate), toK = _toKey(toDate);
+  var hist = histSrc || S.history;
+  var entries = hist.filter(function(e){
+    var k = dayKey(e.ts);
+    return inSet(e.itemId) && k >= fromK && k <= toK;
+  });
 
-  if(!entries.length) return [];
-
-  // Find the item's current balance and work backwards to get opening
-  var item = itemId ? S.items.find(function(i){ return Number(i.id)===Number(itemId); }) : null;
-
-  // Build map: dateStr → { in, out, waste, adj }
+  // dateKey → { in, out, waste, adj }   (adj = signed change, + means stock went up)
   var dayMap = {};
   entries.forEach(function(e){
-    var d = new Date(e.ts);
-    var key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+    var key = dayKey(e.ts);
     if(!dayMap[key]) dayMap[key]={in:0,out:0,waste:0,adj:0};
-    if(e.type==='IN')    dayMap[key].in    += Number(e.qty);
-    else if(e.type==='OUT') dayMap[key].out += Number(e.qty);
-    else if(e.type==='WASTE') dayMap[key].waste += Number(e.qty);
-    else if(e.type==='ADJ')   dayMap[key].adj   += Number(e.qty);
+    var q = Number(e.qty) || 0;
+    if(e.type==='IN')         dayMap[key].in    = r2(dayMap[key].in + q);
+    else if(e.type==='OUT')   dayMap[key].out   = r2(dayMap[key].out + q);
+    else if(e.type==='WASTE') dayMap[key].waste = r2(dayMap[key].waste + q);
+    else if(e.type==='ADJ')   dayMap[key].adj   = r2(dayMap[key].adj + stockDelta(e));
   });
+  /* CALC: every calendar day in the range gets a row (days without
+     movements carry the balance forward), so the table and the trend
+     line have no gaps. Very long ranges only list days with movements. */
+  var days;
+  var spanDays = Math.round((new Date(toK+'T12:00:00Z') - new Date(fromK+'T12:00:00Z')) / 86400000) + 1;
+  if (spanDays > 0 && spanDays <= 400) {
+    days = [];
+    for (var dk = fromK; dk <= toK; dk = addDaysKey(dk, 1)) {
+      days.push(dk);
+      if (!dayMap[dk]) dayMap[dk] = {in:0,out:0,waste:0,adj:0};
+    }
+  } else {
+    days = Object.keys(dayMap).sort();
+  }
 
-  var days = Object.keys(dayMap).sort();
-
-  // Compute opening for first day by walking backwards from current balance
-  // Sum all IN after period end, subtract all OUT/WASTE/ADJ after period end
-  var currentBal = item ? item.balance : S.items.reduce(function(s,i){ return s+i.balance; },0);
-  var afterEntries = S.history.filter(function(e){
-    var d = new Date(e.ts);
-    var match = !itemId || Number(e.itemId) === Number(itemId);
-    return match && d > toDate;
+  // Current balance of the selected items, then walk BACKWARDS through every
+  // movement after the period end to get the balance at the end of the period.
+  var runningBal = S.items.reduce(function(s,i){ return inSet(i.id) ? s + (Number(i.balance)||0) : s; }, 0);
+  hist.forEach(function(e){
+    if(inSet(e.itemId) && dayKey(e.ts) > toK) runningBal -= stockDelta(e);
   });
-  var runningBal = currentBal;
-  afterEntries.forEach(function(e){
-    if(e.type==='IN') runningBal -= Number(e.qty);
-    else runningBal += Number(e.qty);
-  });
-  // Also subtract entries within range that happened after first day
-  var firstDayStr = days[0];
+  // …then back through the period itself to get the opening balance.
+  var net = 0;
+  days.forEach(function(dk){ var r=dayMap[dk]; net += r.in - r.out - r.waste + r.adj; });
+  var open = r2(runningBal - net);
 
-  // Build rows with carry-forward
   var rows = [];
-  var open = runningBal;
-  // Walk from first day back: subtract this day's net to get opening
-  // Actually: compute open of first day = runningBal minus all in-range-days net
-  var totalInRange = {in:0,out:0,waste:0,adj:0};
-  days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  var periodOpenBal = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
-
-  open = periodOpenBal;
+  /* CALC: a range with NO movements used to report opening = closing = 0.
+     The balance at the start/end of the range is now always returned. */
+  rows.openBal = open;
+  rows.closeBal = r2(runningBal);
+  rows.hasMoves = entries.length > 0;
   days.forEach(function(dk){
     var r = dayMap[dk];
-    var close = open + r.in - r.out - r.waste - r.adj;
+    var close = r2(open + r.in - r.out - r.waste + r.adj);
     rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
     open = close;
   });
   return rows;
 }
 
-/* Returns average daily OUT (kg/day) for an item over the last 30 days */
+/* ── Report runner ─────────────────────────────────────────────
+   FIX (mixed units): items in different units can't be added together.
+   For "All" / category reports the report now uses ONE unit (kg when
+   present, otherwise the most common one) and says how many items in
+   other units were left out.
+   FIX (history limit): only the latest 5,000 movements are kept live.
+   If the report starts before the oldest loaded movement, the FULL
+   history is fetched once for the report.                           */
+function runReport(from, to) {
+  if (from > to) { var tmp = from; from = to; to = tmp; S.rptFrom = from; S.rptTo = to; }   // CALC: reversed dates
+  var itemId = S.rptItem ? S.rptItem : null;
+  var pool = S.rptCat === 'All' ? S.items : S.items.filter(function(i){ return i.category === S.rptCat; });
+  var ids, unit, note = '';
+  if (itemId) {
+    ids = [Number(itemId)]; unit = unitFor(itemId);
+  } else {
+    var counts = {};
+    pool.forEach(function(i){ var u = (i.unit||'kg').trim().toLowerCase(); counts[u] = (counts[u]||0) + 1; });
+    var units = Object.keys(counts);
+    unit = counts['kg'] ? 'kg' : (units.sort(function(a,b){ return counts[b]-counts[a]; })[0] || 'kg');
+    var used = pool.filter(function(i){ return (i.unit||'kg').trim().toLowerCase() === unit; });
+    ids = used.map(function(i){ return i.id; });
+    var left = pool.length - used.length;
+    if (left > 0) note = left + ' item' + (left===1?'':'s') + ' in other units (not ' + unit + ') left out — pick them one by one to see their report.';
+  }
+  S.rptUnit = unit; S.rptNote = note;
+
+  var oldest = S.history.length ? dayKey(S.history[S.history.length-1].ts) : null;
+  var truncated = S.history.length >= HISTORY_LIMIT;
+  if (truncated && oldest && from <= oldest && fbRef) {
+    if (S._fullHist && (Date.now() - S._fullHist.at) < 5*60*1000) {
+      S.rptRows = buildCategoryLedgerFrom(ids, from, to, S._fullHist.list);
+      render(); return;
+    }
+    S.rptLoading = true; render();
+    fbRef.child('history').once('value', function(snap){
+      var saveKeys = _histKeys;                       // don't disturb the live key index
+      var list = historyFromFb(snap.val());
+      _histKeys = saveKeys;
+      S._fullHist = { at: Date.now(), list: list };
+      S.rptLoading = false;
+      S.rptRows = buildCategoryLedgerFrom(ids, from, to, list);
+      render();
+    }, function(){ S.rptLoading = false; S.rptRows = buildCategoryLedger(ids, from, to);
+      S.rptNote = (S.rptNote ? S.rptNote + ' ' : '') + 'Full history could not be loaded — older days may be incomplete.'; render(); });
+    return;
+  }
+  S.rptRows = buildCategoryLedger(ids, from, to);
+  render();
+}
+function buildCategoryLedgerFrom(itemIds, fromDate, toDate, hist) {
+  var idSet = {};
+  (itemIds||[]).forEach(function(id){ idSet[String(Number(id))] = true; });
+  return _ledgerCore(idSet, fromDate, toDate, hist);
+}
+
+function buildDailyLedger(itemId, fromDate, toDate) {
+  var idSet = {};
+  if(itemId) idSet[String(Number(itemId))] = true;
+  else S.items.forEach(function(i){ idSet[String(Number(i.id))] = true; });
+  return _ledgerCore(idSet, fromDate, toDate);
+}
+
+/* Average daily usage (OUT + WASTE) over the last 30 days.
+   AUDIT: this used to divide by the number of days that HAD a movement,
+   so one busy day made usage look huge (e.g. 100 kg used once in a month
+   = "100 kg/day" → order of 1,400 kg). It now divides by calendar days:
+   30, or the days since the item's first movement if that is shorter,
+   but never fewer than 7 (so a brand-new item isn't over-estimated). */
 function avgDailyUsage(itemId) {
-  var cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  var entries = S.history.filter(function(e){
-    return Number(e.itemId) === Number(itemId) &&
-           (e.type === 'OUT' || e.type === 'WASTE') &&
-           new Date(e.ts).getTime() >= cutoff;
+  var now = Date.now(), cutoff = now - 30 * 86400000;
+  /* CALC: summed in whole cents — adding decimals like 0.1 + 0.2 in a
+     different order gave x.xx4999… vs x.xx5 and the average came out
+     0.01 different depending on history order. */
+  var cents = 0, first = null;
+  S.history.forEach(function(e){
+    if (Number(e.itemId) !== Number(itemId)) return;
+    var t = new Date(e.ts).getTime();
+    if (first === null || t < first) first = t;
+    if ((e.type === 'OUT' || e.type === 'WASTE') && t >= cutoff && !isVoided(e)) cents += Math.round((Number(e.qty) || 0) * 100);
   });
-  if(!entries.length) return 0;
-  var totalOut = entries.reduce(function(s,e){ return s + Number(e.qty); }, 0);
-  // count distinct days with activity
-  var days = {};
-  entries.forEach(function(e){ days[new Date(e.ts).toDateString()] = 1; });
-  var activeDays = Object.keys(days).length;
-  return activeDays ? Math.round((totalOut / activeDays) * 10) / 10 : 0;
+  if (cents <= 0) return 0;
+  var spanDays = first === null ? 30 : Math.round((now - Math.max(first, cutoff)) / 86400000);
+  spanDays = Math.max(7, Math.min(30, spanDays));
+  return Math.round(cents / spanDays) / 100;
 }
 
 function defaultDateRange() {
-  var to = new Date();
-  var from = new Date(); from.setDate(from.getDate()-29);
-  function fmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-  return { from: fmt(from), to: fmt(to) };
+  var to = todayKey();
+  return { from: addDaysKey(to, -29), to: to };
 }
 
 /* Category-wise ledger: aggregates multiple items */
 function buildCategoryLedger(itemIds, fromDate, toDate) {
-  // Build combined daily ledger across multiple item IDs
-  var entries = S.history.filter(function(e){
-    var d = new Date(e.ts);
-    var match = itemIds.indexOf(Number(e.itemId)) >= 0 || itemIds.indexOf(String(e.itemId)) >= 0;
-    return match && d >= fromDate && d <= toDate;
-  }).slice().sort(function(a,b){ return new Date(a.ts)-new Date(b.ts); });
-
-  if(!entries.length) return [];
-  var dayMap = {};
-  entries.forEach(function(e){
-    var d = new Date(e.ts);
-    var key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-    if(!dayMap[key]) dayMap[key]={in:0,out:0,waste:0,adj:0};
-    if(e.type==='IN') dayMap[key].in += Number(e.qty);
-    else if(e.type==='OUT') dayMap[key].out += Number(e.qty);
-    else if(e.type==='WASTE') dayMap[key].waste += Number(e.qty);
-    else if(e.type==='ADJ') dayMap[key].adj += Number(e.qty);
-  });
-  var days = Object.keys(dayMap).sort();
-  var catBalance = S.items.filter(function(i){ return itemIds.indexOf(i.id)>=0||itemIds.indexOf(Number(i.id))>=0; })
-    .reduce(function(s,i){ return s+i.balance; },0);
-  var afterEntries = S.history.filter(function(e){
-    var d = new Date(e.ts);
-    return (itemIds.indexOf(Number(e.itemId))>=0) && d > toDate;
-  });
-  var runningBal = catBalance;
-  afterEntries.forEach(function(e){ if(e.type==='IN') runningBal -= Number(e.qty); else runningBal += Number(e.qty); });
-  var totalInRange = {in:0,out:0,waste:0,adj:0};
-  days.forEach(function(dk){ var r=dayMap[dk]; totalInRange.in+=r.in; totalInRange.out+=r.out; totalInRange.waste+=r.waste; totalInRange.adj+=r.adj; });
-  var open = runningBal - totalInRange.in + totalInRange.out + totalInRange.waste + totalInRange.adj;
-  var rows = [];
-  days.forEach(function(dk){
-    var r = dayMap[dk];
-    var close = open + r.in - r.out - r.waste - r.adj;
-    rows.push({ date:dk, open:open, in:r.in, out:r.out, waste:r.waste, adj:r.adj, close:close });
-    open = close;
-  });
-  return rows;
+  var idSet = {};
+  (itemIds||[]).forEach(function(id){ idSet[String(Number(id))] = true; });
+  return _ledgerCore(idSet, fromDate, toDate);
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1570,13 +1859,15 @@ function buildCategoryLedger(itemIds, fromDate, toDate) {
    • Data Portability — full backup/restore
 ══════════════════════════════════════════════════════ */
 
-/* ── End-of-Day Snapshots ──────────────────────── */
+/* ── Daily Snapshots ───────────────────────────────
+   FIX #14: the auto snapshot is taken on the FIRST load of the day,
+   so it records the START-of-day balance (= previous day's close).
+   Labels in the UI now say so.                                      */
 function snapDateKey(d) {
-  d = d || new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  return dayKey(d || new Date());
 }
 function buildSnapshot(by) {
-  var totalKg = S.items.reduce(function(s,i){ return s + Number(i.balance); }, 0);
+  var totalKg = totalKgOnHand();
   var lowCount = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
   var outCount = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
   return {
@@ -1593,27 +1884,37 @@ function takeSnapshot(by) {
   var key = snapDateKey();
   var snap = buildSnapshot(by);
   S.snapshots = S.snapshots || {};
+  /* Manual snapshots are stored under their own key so they never
+     overwrite the automatic start-of-day snapshot. */
+  var t = new Date();
+  key = key + ' ' + String(t.getHours()).padStart(2,'0') + ':' + String(t.getMinutes()).padStart(2,'0') + ':' + String(t.getSeconds()).padStart(2,'0');
   S.snapshots[key] = snap;
   if(typeof fbRef !== 'undefined' && fbRef) {
     fbRef.child('snapshots').child(key).set(snap);
   }
-  showToast('📸 Snapshot saved for '+key);
+  showToast('📸 Snapshot saved ('+key+')');
   render();
 }
 /* Auto: if no snapshot exists for yesterday, capture one (only when items exist) */
+/* AUDIT: two devices opening the app at the start of the day both wrote
+   today's snapshot, and the later one (taken after some movements)
+   replaced the true start-of-day figures. The auto snapshot is now
+   created with a transaction that only writes if none exists yet.
+   It is also re-checked every 10 minutes, so a dashboard left open
+   overnight still captures the new day. */
 function autoSnapshotCheck() {
-  if(!S.items || !S.items.length) return;
-  var keys = Object.keys(S.snapshots||{});
-  if(!keys.length) {
-    // First run — seed today's snapshot so future deltas exist
-    takeSnapshot('auto-first');
-    return;
-  }
-  var today = snapDateKey();
-  if(!S.snapshots[today]) {
-    takeSnapshot('auto-daily');
-  }
+  if(!S.items || !S.items.length || !fbRef) return;
+  var key = snapDateKey();
+  if(S.snapshots && S.snapshots[key]) return;
+  var snap = buildSnapshot(Object.keys(S.snapshots||{}).length ? 'auto-daily' : 'auto-first');
+  fbRef.child('snapshots').child(key).transaction(function(cur){
+    if (cur) return;          // another device already captured today — keep it
+    return snap;
+  }, function(err, committed, res){
+    if (!err && res && res.val()) { S.snapshots = S.snapshots || {}; S.snapshots[key] = res.val(); }
+  }, false);
 }
+setInterval(function(){ if (_bootDone && !S.syncing) autoSnapshotCheck(); }, 10 * 60 * 1000);
 function snapshotKeysSorted() {
   return Object.keys(S.snapshots||{}).sort().reverse();
 }
@@ -1655,9 +1956,9 @@ function usageTopMovers(days, limit) {
 }
 /* Days of stock remaining for an item, given its avg daily usage */
 function daysOfStock(item) {
-  var avg = avgDailyUsage(item.id);
-  if(avg <= 0) return null;
-  return Math.floor(item.balance / avg);
+  var avgC = cents(avgDailyUsage(item.id));
+  if(avgC <= 0) return null;
+  return Math.floor(cents(item.balance) / avgC);
 }
 /* Items at risk: low/out OR <7 days of stock — sorted by urgency */
 function usageAtRisk(limit) {
@@ -1699,8 +2000,7 @@ function usageByOrigin() {
   });
   // Second pass: bucket history outflows into the right origin
   var now = Date.now();
-  var todayStart = new Date(); todayStart.setHours(0,0,0,0);
-  var todayMs = todayStart.getTime();
+  var tKey = todayKey();
   var ms7  = now - 7*86400000;
   var ms30 = now - 30*86400000;
   S.history.forEach(function(e){
@@ -1717,7 +2017,7 @@ function usageByOrigin() {
     var qty = Number(e.qty);
     g.out30 += qty;
     if(t >= ms7)     { g.out7 += qty; g.moves[String(e.itemId)] = (g.moves[String(e.itemId)]||0) + qty; }
-    if(t >= todayMs) { g.outToday += qty; }
+    if(dayKey(t) === tKey) { g.outToday += qty; }
   });
   // Convert to array, compute top mover per origin, round numbers, sort
   return Object.keys(grouped).map(function(k){
@@ -1749,14 +2049,16 @@ function usageByOrigin() {
 function filterHistory(entries) {
   var f = S.actFilter || {};
   var rangeCutoff = null;
+  var rangeDay = null;
   if(f.range === 'today') {
-    var d = new Date(); d.setHours(0,0,0,0); rangeCutoff = d.getTime();
+    rangeDay = todayKey();
   } else if(f.range === '7d')  rangeCutoff = Date.now() - 7*86400000;
   else if(f.range === '30d') rangeCutoff = Date.now() - 30*86400000;
   var srch = (f.search||'').toLowerCase().trim();
   return entries.filter(function(e){
     if(f.type && f.type !== 'All' && e.type !== f.type) return false;
     if(f.item && f.item !== 'All' && String(e.itemId) !== String(f.item)) return false;
+    if(rangeDay && dayKey(e.ts) !== rangeDay) return false;
     if(rangeCutoff && new Date(e.ts).getTime() < rangeCutoff) return false;
     if(srch) {
       var hay = ((e.itemName||'')+' '+(e.note||'')).toLowerCase();
@@ -1851,7 +2153,7 @@ function importFullBackup(file) {
       S.importBusy=false; showToast('⚠ File missing required "items" array.'); render(); return;
     }
     var summary = 'Items: '+(raw.items?raw.items.length:0)
-      +' · History: '+(raw.history?raw.history.length:0)
+      +' · History: '+(raw.history?Object.keys(raw.history).length:0)
       +' · Snapshots: '+(raw.snapshots?Object.keys(raw.snapshots).length:0)
       +' · Updates: '+(raw.teamUpdates?Object.keys(raw.teamUpdates).length:0);
     showConfirm(
@@ -1863,11 +2165,25 @@ function importFullBackup(file) {
            If any saveItem() call also exists for those items, Firebase ends up
            with both numeric and timestamp keys — causing duplicate cards.
            Keyed object is consistent with how saveAll() and saveItem() write. */
-        var importItemsObj = {};
-        (raw.items || []).forEach(function(it){ if(it && it.id) importItemsObj[String(it.id)] = it; });
+        var importItemsObj = {}, importItemsArr = [];
+        (raw.items || []).forEach(function(it){
+          if(it && it.id) {
+            var nid = /^\d+$/.test(String(it.id)) ? Number(it.id) : it.id;
+            var clean = Object.assign({}, it, { id: nid, balance: Math.max(0, r2(it.balance)), threshold: Math.max(0, Number(it.threshold)||0) });
+            importItemsObj[String(it.id)] = clean;
+            importItemsArr.push(clean);
+          }
+        });
+        /* FIX #7: history must ALSO be keyed by entry id — writing an array
+           creates "0","1","2"… keys and later deletes miss the right node. */
+        var rawHist = Array.isArray(raw.history) ? raw.history
+                    : (raw.history && typeof raw.history === 'object') ? Object.keys(raw.history).map(function(k){ return raw.history[k]; })
+                    : [];
+        var importHistObj = {};
+        rawHist.forEach(function(e){ if(e && e.id !== undefined) importHistObj[String(e.id)] = e; });
         var update = {
           items: importItemsObj,
-          history: raw.history || [],
+          history: importHistObj,
           comments: raw.comments || {},
           categories: raw.categories || S.categories,
           snapshots: raw.snapshots || {},
@@ -1876,14 +2192,19 @@ function importFullBackup(file) {
         fbRef.update(update, function(err) {
           if(err) { showToast('⚠ Import failed: '+err.message); }
           else {
-            S.items = update.items;
-            S.history = update.history;
-            S.comments = update.comments;
+            /* FIX #7: S.items must be an ARRAY (was set to the keyed object,
+               which crashed every S.items.filter/reduce call). */
+            S.items = importItemsArr;
+            S.history = historyFromFb(importHistObj);
+            S.history.sort(function(a,b){ return new Date(b.ts) - new Date(a.ts); });
+            S.comments = normalizeComments(update.comments);
+            importItemsArr.forEach(function(it){ unmarkItemDeleted(it.id); });
+            indexItemKeys(importItemsObj);
             S.categories = update.categories;
             S.snapshots = update.snapshots;
             S.teamUpdates = update.teamUpdates;
             // Mark all items as pending so reconciliation works smoothly
-            (Array.isArray(S.items) ? S.items : []).forEach(_markPendingItem);
+            S.items.forEach(_markPendingItem);
             showToast('✅ Backup restored successfully.');
           }
           S.importBusy = false;
@@ -1987,26 +2308,59 @@ function _clearStalePending() {
   });
 }
 
-function saveAll(cb) {
-  /* Write items as a keyed object {id: item} — NOT as an array.
-     Writing an array to Firebase creates numeric keys ("0","1","2…").
-     If saveItem() also writes under items/<timestamp-id>, Firebase ends
-     up with BOTH numeric and timestamp keys, and objToArr returns
-     duplicates. Keyed objects avoid this entirely.
-     The optional `cb` is invoked with (err) once Firebase confirms the
-     write — callers (e.g. deleteItem) use this to know the delete is
-     permanent and clear the persistent pending-delete tracker. */
-  var itemsObj = {};
-  S.items.forEach(function(item){ itemsObj[String(item.id)] = item; });
-  fbRef.update({
-    items: itemsObj,
-    comments: S.comments,
-    categories: S.categories,
-    teamUpdates: S.teamUpdates || {},
-    snapshots: S.snapshots || {}
-  }, typeof cb === 'function' ? cb : undefined);
-  // Mark every item as pending — we just wrote them all.
-  S.items.forEach(_markPendingItem);
+/* FIX #8: saveAll() used to overwrite the WHOLE items / comments /
+   snapshots / teamUpdates branches from this device's local copy, so a
+   stock change made on another device a moment earlier was silently lost.
+   It is replaced by small targeted writes below. */
+
+/* Remember the real Firebase key(s) of every item, so deletes hit the
+   right node even for old data stored under array keys ("0","1",…). */
+var _itemKeys = {}; // itemId -> [firebaseKey, …]
+function indexItemKeys(obj) {
+  _itemKeys = {};
+  if(!obj) return;
+  var keys = Array.isArray(obj) ? obj.map(function(_,i){ return String(i); }) : Object.keys(obj);
+  keys.forEach(function(k){
+    var it = obj[k];
+    if(!it || typeof it !== 'object' || it.id === undefined) return;
+    (_itemKeys[String(it.id)] = _itemKeys[String(it.id)] || []).push(k);
+  });
+}
+function removeItemRemote(id, cb) {
+  var upd = {};
+  upd['items/' + String(id)] = null;
+  (_itemKeys[String(id)] || []).forEach(function(k){ upd['items/' + k] = null; });
+  fbRef.update(upd, typeof cb === 'function' ? cb : undefined);
+}
+function removeEntryComments(entryId) {
+  var k = String(entryId);
+  if (S.comments && S.comments[k]) { delete S.comments[k]; if (fbRef) fbRef.child('comments').child(k).remove(); }
+}
+function saveCategories() {
+  if(!fbRef) return;
+  fbRef.child('categories').set(S.categories);
+}
+/* Comments: transaction on ONE entry's comment list, so two people
+   commenting at the same time both survive. */
+function pushCommentRemote(entryKey, comment) {
+  if(!fbRef) return;
+  fbRef.child('comments').child(entryKey).transaction(function(cur){
+    var arr = Array.isArray(cur) ? cur : (cur && typeof cur === 'object' ? Object.keys(cur).map(function(k){ return cur[k]; }) : []);
+    arr.push(comment);
+    return arr;
+  });
+}
+function removeCommentRemote(entryKey, comment) {
+  if(!fbRef) return;
+  fbRef.child('comments').child(entryKey).transaction(function(cur){
+    var arr = Array.isArray(cur) ? cur : (cur && typeof cur === 'object' ? Object.keys(cur).map(function(k){ return cur[k]; }) : []);
+    var out = [], removed = false;
+    arr.forEach(function(c){
+      if(!removed && c && c.ts === comment.ts && c.text === comment.text) { removed = true; return; }
+      out.push(c);
+    });
+    return out.length ? out : null;
+  });
 }
 
 /* Surgical per-item write — writes ONLY the changed item's child path.
@@ -2057,9 +2411,35 @@ function pushHistoryEntry(entry) {
   });
   fbRef.child('history').child(String(entry.id)).set(withServerTs);
 }
+/* FIX #7: history may have been written as an ARRAY by an old import,
+   which stores entries under keys "0","1","2"… instead of their id.
+   We remember the real Firebase key(s) of every entry so a delete
+   removes the right node (otherwise deleted entries came back). */
+var _histKeys = {}; // entryId -> [firebaseKey, …]
+function historyFromFb(obj) {
+  _histKeys = {};
+  if(!obj) return [];
+  var keys = Array.isArray(obj) ? obj.map(function(_,i){ return String(i); }) : Object.keys(obj);
+  var out = [], seen = {};
+  keys.forEach(function(k){
+    var e = obj[k];
+    if(!e || typeof e !== 'object') return;
+    var id = String(e.id !== undefined ? e.id : k);
+    (_histKeys[id] = _histKeys[id] || []).push(k);
+    if(seen[id]) return;
+    seen[id] = true;
+    out.push(normalizeHistoryEntry(e));
+  });
+  return out;
+}
 function removeHistoryEntry(entryId) {
   if(typeof fbRef === 'undefined' || !fbRef) return;
-  fbRef.child('history').child(String(entryId)).remove();
+  var id = String(entryId);
+  var upd = {};
+  upd['history/' + id] = null;
+  (_histKeys[id] || []).forEach(function(k){ upd['history/' + k] = null; });
+  fbRef.update(upd);
+  delete _histKeys[id];
 }
 
 /* Entry-time helper: returns ms epoch using server time when available.
@@ -2072,7 +2452,8 @@ function entryTime(e) {
     var t = new Date(e.ts).getTime();
     if(!isNaN(t)) return t;
   }
-  return Number(e.id) || 0;
+  var n = Number(e.id) || 0;
+  return n > 1e14 ? Math.floor(n / 1000) : n;   // newEntryId() = ms*1000 + rand
 }
 
 /* Normalize a history entry after reading from Firebase.
@@ -2084,6 +2465,19 @@ function normalizeHistoryEntry(e) {
   if(typeof e.serverTs === 'number' && e.serverTs > 0) {
     // Override the local-clock ts with the server's authoritative time
     e.ts = new Date(e.serverTs).toISOString();
+  }
+  /* FIX #1 (legacy data repair): old manual balance edits were saved
+     with qty = |new − old|, losing the direction. The note still has
+     "old → new", so rebuild the signed value (amount removed). */
+  /* AUDIT: anchored to the START of the note and skipped for reversal
+     entries — otherwise a reversal note "(was: ✏️ Manual balance edit: …)"
+     matched too and the reversal got the SAME sign as the edit it undoes. */
+  if(e.type === 'ADJ' && !e.reversalOf && typeof e.note === 'string') {
+    var m = e.note.match(/^\s*✏️?\s*Manual balance edit:\s*(-?[\d.]+)\s*→\s*(-?[\d.]+)\s*$/);
+    if(m) {
+      var removed = r2(parseFloat(m[1]) - parseFloat(m[2]));
+      if(!isNaN(removed)) e.qty = removed;
+    }
   }
   return e;
 }
@@ -2120,12 +2514,21 @@ function _saveAlertedItem(itemId, status) {
   try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
 }
 
+/* FIX: snooze is now a SHARED setting (Firebase), so every device waits
+   the same time before re-alerting the roastery. */
+function snoozeMinutes() {
+  return Number(S.shared && S.shared.snoozeMinutes) || Number(S.alertPrefs && S.alertPrefs.snoozeMinutes) || 60;
+}
+function saveSharedSetting(key, val) {
+  S.shared = Object.assign({}, S.shared || {}); S.shared[key] = val;
+  if (fbRef) fbRef.child('settings').child(key).set(val);
+}
 function _shouldAlert(itemId, status) {
   var prev = _alertedItems[String(itemId)];
   if (!prev) return true;                               // never alerted → alert
   if (prev.status !== status) return true;              // escalated (LOW → OUT) → alert
   var elapsed = Date.now() - new Date(prev.ts).getTime();
-  var snoozeMs = ((S.alertPrefs && S.alertPrefs.snoozeMinutes) || 60) * 60 * 1000;
+  var snoozeMs = snoozeMinutes() * 60 * 1000;
   return elapsed > snoozeMs;                            // configurable snooze
 }
 
@@ -2143,43 +2546,80 @@ function sendStockAlert(payload) {
   });
 }
 
+/* FIX #11: cross-device de-duplication.
+   The localStorage tracker only knew about THIS browser, so with the
+   dashboard open on 3 devices the roastery got every alert 3 times.
+   Now each auto alert is "claimed" with a Firebase transaction on
+   windmill-stock/alertDedup/<itemId>. Only the device whose claim
+   commits sends the alert; the others see the claim and skip.
+   (Stored under windmill-stock, NOT stock_alerts, so the roastery
+   app never sees these bookkeeping records.)                        */
+function _persistAlertedItems() {
+  try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
+}
+function sendAutoAlertOnce(itemId, status, payload) {
+  if (!alertsRef) return;
+  if (!fbRef) { sendStockAlert(payload); return; }
+  var snoozeMs = snoozeMinutes() * 60 * 1000;
+  var key = String(itemId);
+  // Cheap local check first (last synced copy) — avoids a network round-trip on every sync
+  var known = S.alertDedup && S.alertDedup[key];
+  if (known && known.status === status && (Date.now() - Number(known.ts||0)) < snoozeMs) return;
+  if (_claimInFlight[key]) return;
+  _claimInFlight[key] = true;
+  fbRef.child('alertDedup').child(key).transaction(function(cur){
+    if (cur && cur.status === status && (Date.now() - Number(cur.ts||0)) < snoozeMs) return; // abort — already sent
+    return { status: status, ts: Date.now(), by: _clientId };
+  }, function(err, committed, snap){
+    delete _claimInFlight[key];
+    if (snap && snap.val()) { S.alertDedup = S.alertDedup || {}; S.alertDedup[key] = snap.val(); }
+    if (!err && committed) sendStockAlert(payload);
+  }, false);
+}
+var _claimInFlight = {};
+function clearAutoAlertClaim(itemId) {
+  delete _alertedItems[String(itemId)];
+  _persistAlertedItems();
+  if (fbRef && S.alertDedup && S.alertDedup[String(itemId)]) {
+    fbRef.child('alertDedup').child(String(itemId)).remove();
+  }
+}
+function buildAutoAlertPayload(item, status, bal, msg) {
+  return {
+    type: status === 'OUT' ? 'auto_out' : 'auto_low', status: status,
+    itemId: item.id, itemName: item.name,
+    balance: bal, threshold: item.threshold, unit: item.unit,
+    message: msg
+  };
+}
+
 /* ── Auto-scanner — runs on boot AND every Firebase sync ─
    Checks every item. Sends an alert for any that are LOW
    or OUT, skipping items already alerted for the same
-   status within the past hour.                          */
+   status within the snooze window (on ANY device).       */
 function scanAndSendAlerts() {
   if (!alertsRef || !S.items || !S.items.length) return;
-  var newAlerts = []; // collect for chime / desktop notif
+  var newAlerts = []; // collect for chime / desktop notif (local only)
   S.items.forEach(function(item) {
     var status = getStatus(item.balance, item.threshold);
 
     if (status === 'OK') {
-      // Item recovered — clear its tracker so next dip re-alerts
-      delete _alertedItems[String(item.id)];
+      // Item recovered — clear trackers so next dip re-alerts
+      // FIX #10: the local delete is now persisted to localStorage too.
+      if (_alertedItems[String(item.id)] || (S.alertDedup && S.alertDedup[String(item.id)])) clearAutoAlertClaim(item.id);
       return;
     }
 
-    if (!_shouldAlert(item.id, status)) return;  // already alerted recently
+    var bal = r2(item.balance);
+    var msg = status === 'OUT'
+      ? '🚨 OUT OF STOCK: ' + item.name + ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+      : '⚠️ LOW STOCK: ' + item.name + ' is at ' + bal + ' ' + item.unit + ' (minimum: ' + item.threshold + ' ' + item.unit + ').';
+    // Roastery alert — de-duplicated across ALL devices
+    sendAutoAlertOnce(item.id, status, buildAutoAlertPayload(item, status, bal, msg));
 
-    if (status === 'OUT') {
-      sendStockAlert({
-        type: 'auto_out', status: 'OUT',
-        itemId: item.id, itemName: item.name,
-        balance: item.balance, threshold: item.threshold, unit: item.unit,
-        message: '🚨 OUT OF STOCK: ' + item.name +
-                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
-      });
-      newAlerts.push({ status:'OUT', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
-    } else {
-      sendStockAlert({
-        type: 'auto_low', status: 'LOW',
-        itemId: item.id, itemName: item.name,
-        balance: item.balance, threshold: item.threshold, unit: item.unit,
-        message: '⚠️ LOW STOCK: ' + item.name + ' is at ' + item.balance +
-                 ' ' + item.unit + ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
-      });
-      newAlerts.push({ status:'LOW', name:item.name, balance:item.balance, unit:item.unit, threshold:item.threshold });
-    }
+    // Local chime / desktop notification — de-duplicated per device
+    if (!_shouldAlert(item.id, status)) return;
+    newAlerts.push({ status:status, name:item.name, balance:bal, unit:item.unit, threshold:item.threshold });
     _saveAlertedItem(item.id, status);
   });
 
@@ -2213,27 +2653,36 @@ function sendManualAlert() {
   showToast('📨 Alert sent to Roastery!');
 }
 
-function applyRemoteData(data, flash) {
+function applyRemoteData(data, flash, changed) {
   _clearStalePending();
+  /* PERF: when only another branch changed (e.g. an item balance), reuse the
+     already-processed history instead of re-parsing up to 5,000 entries. */
+  var reuseHist = changed && changed !== 'history';
 
   /* Called when Firebase pushes new data */
-  var items      = data.items      ? objToArr(data.items)   : null;
-  var history    = data.history    ? normalizeHistory(objToArr(data.history)) : [];
+  if(data.items) indexItemKeys(data.items);
+  /* AUDIT: a missing items branch means "no items" (the last item was
+     deleted on another device) — it used to be ignored, so the deleted
+     item stayed on screen everywhere else. */
+  var items      = itemsFromFb(data.items);
+  var history    = reuseHist ? S.history : (data.history ? historyFromFb(data.history) : []);
   var password   = data.password   || 'windmill2024';
-  var comments   = data.comments   || {};
+  var comments   = normalizeComments(data.comments);
   var categories = data.categories ? (Array.isArray(data.categories) ? data.categories : Object.values(data.categories)) : null;
   var snapshots  = data.snapshots  || {};
   var teamUpdates= data.teamUpdates|| {};
+  S.alertDedup   = data.alertDedup || {};
+  S.shared       = (data.settings && typeof data.settings === 'object') ? data.settings : {};
 
   /* Sort history newest-first. Firebase children come back in key order,
      not insertion order, so we sort by timestamp to keep the UI consistent. */
-  history.sort(function(a,b){
+  if (!reuseHist) history.sort(function(a,b){
     var ta = a && a.ts ? new Date(a.ts).getTime() : 0;
     var tb = b && b.ts ? new Date(b.ts).getTime() : 0;
     return tb - ta;
   });
 
-  if(items) {
+  if(items && (!changed || changed === 'items')) {
     /* ── Per-item reconciliation ─────────────────────────────
        For each remote item, check if we have a pending local write.
        - If the remote balance MATCHES our pending value → server has
@@ -2291,7 +2740,7 @@ function applyRemoteData(data, flash) {
      entry, confirm dialogs, login screens) still block re-render because
      re-rendering would tear them down mid-action. */
   var modalOpen = S.showLogin || S.showSettingsLogin || S.logModal !== null
-                  || S.confirmModal !== null || S.showAddItem || S.showCPwd;
+                  || S.confirmModal !== null || S.showAddItem || S.showCPwd || S.editItem;
   if(modalOpen) {
     S.pendingUpdate = true;
     showPendingBanner(true);
@@ -2340,6 +2789,54 @@ function renderWithFocus() {
   }
 }
 
+/* AUDIT: if an item exists under BOTH an old array key ("0") and its id
+   key, prefer the copy stored under its id — that is the one every write
+   updates. (objToArr kept whichever came first, i.e. the stale "0" copy.)
+   Also: numeric ids are forced to numbers so the log modal / edit buttons
+   (which compare with ===) work for imported data too. */
+function itemsFromFb(obj) {
+  if(!obj) return [];
+  var keys = Array.isArray(obj) ? obj.map(function(_,i){ return String(i); }) : Object.keys(obj);
+  var best = {}, order = [];
+  keys.forEach(function(k){
+    var it = obj[k];
+    if(!it || typeof it !== 'object' || it.id === undefined || it.id === null || it.id === '') return;
+    var id = String(it.id);
+    if(!best[id]) { order.push(id); best[id] = { k:k, it:it }; }
+    else if(k === id && best[id].k !== id) best[id] = { k:k, it:it };
+  });
+  return cleanItems(order.map(function(id){ return best[id].it; }));
+}
+/* The Firebase key that writes for this item should go to */
+function itemKey(id) {
+  var ks = _itemKeys[String(id)] || [];
+  return ks.indexOf(String(id)) >= 0 ? String(id) : (ks[0] || String(id));
+}
+
+/* FIX #4: round balances coming from the database (old data may
+   already contain values like 12.300000000000001). */
+function cleanItems(arr) {
+  return arr.map(function(it){
+    var b = r2(it.balance);
+    var id = (typeof it.id === 'string' && /^\d+$/.test(it.id)) ? Number(it.id) : it.id;
+    return (b === it.balance && id === it.id) ? it : Object.assign({}, it, { balance: b, id: id });
+  });
+}
+
+/* Comments are stored as { entryId: [ {text,ts,user}, … ] }. Firebase may
+   return a list as an object with numeric keys — always hand back arrays. */
+function normalizeComments(raw) {
+  var out = {};
+  if(!raw || typeof raw !== 'object') return out;
+  Object.keys(raw).forEach(function(k){
+    var v = raw[k];
+    var arr = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.keys(v).map(function(x){ return v[x]; }) : []);
+    arr = arr.filter(function(c){ return c && typeof c === 'object'; });
+    if(arr.length) out[k] = arr;
+  });
+  return out;
+}
+
 // Firebase stores objects with auto keys; convert back to array
 function objToArr(obj) {
   var seen = {};
@@ -2365,6 +2862,19 @@ function showPendingBanner(show) {
   if(!el) return;
   el.className = show ? 'visible' : 'hidden';
 }
+
+/* AUDIT: Settings → About promised "Esc closes any modal" but no handler existed */
+document.addEventListener('keydown', function(e) {
+  if (e.key !== 'Escape') return;
+  if (S.editBalId !== null) return;               // balance edit has its own Esc
+  var open = S.confirmModal || S.logModal !== null || S.showLogin || S.showSettingsLogin || S.showAlertModal
+          || S.showAlertsPopup || S.showSettings || S.showCPwd;
+  if (!open) return;
+  S.confirmModal = null; S.logModal = null; S.logErr = ''; S.showLogin = false; S.showSettingsLogin = false;
+  S.showAlertModal = false; S.showAlertsPopup = false; S.showSettings = false; S.showCPwd = false;
+  S.cpOld = S.cpNew = S.cpConf = S.cpErr = '';
+  render();
+});
 
 /* Whenever user finishes editing (blur on any input), apply pending update */
 document.addEventListener('blur', function() {
@@ -2419,111 +2929,153 @@ function doSettingsLogin() {
   }
 }
 
+/* ══════════════════════════════════════════════════════
+   AUDIT — ATOMIC BALANCE CHANGES
+   Before: each device computed the new balance from ITS OWN copy and
+   wrote the whole item. Two people logging OUT 5 kg on 100 kg at the
+   same moment both wrote 95 → balance 95, but history showed −10.
+   Balance and history then disagreed forever (every report wrong).
+   Now every balance change is a Firebase transaction on
+   items/<id>/balance: Firebase re-runs it against the server value
+   until it commits, so concurrent changes add up correctly. The
+   history entry records what ACTUALLY changed on the server.
+══════════════════════════════════════════════════════ */
+function txnBalance(itemId, computeNew, done) {
+  var before = null;
+  fbRef.child('items').child(itemKey(itemId)).child('balance').transaction(function(cur){
+    if (cur === null || cur === undefined) return;        // item gone → abort
+    before = r2(cur);
+    var next = r2(computeNew(before));
+    return next < 0 ? 0 : next;
+  }, function(err, committed, snap){
+    if (err || !committed) { done(err || new Error('aborted'), null, null); return; }
+    done(null, before, r2(snap.val()));
+  });
+}
+function _setLocalBalance(itemId, bal) {
+  S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({}, i, {balance: bal}) : i; });
+  _pendingItemBal[itemId] = { bal: bal, ts: Date.now() };
+}
+function _alertOnChange(item, before, after) {
+  if (!alertsRef) return;
+  var oldSt = getStatus(before, item.threshold), newSt = getStatus(after, item.threshold);
+  if (newSt === 'OK') { if (oldSt !== 'OK') clearAutoAlertClaim(item.id); return; }
+  if (newSt === oldSt) return;                         // no new crossing
+  if (newSt === 'LOW' && oldSt === 'OUT') return;      // restocked but still low — not a new alert
+  var msg = newSt === 'OUT'
+    ? '🚨 OUT OF STOCK: ' + item.name + ' has reached 0 ' + item.unit + '. Please roast more urgently.'
+    : '⚠️ LOW STOCK: ' + item.name + ' dropped to ' + after + ' ' + item.unit + ' (minimum: ' + item.threshold + ' ' + item.unit + ').';
+  sendAutoAlertOnce(item.id, newSt, buildAutoAlertPayload(item, newSt, after, msg));
+  _saveAlertedItem(item.id, newSt);
+}
+
 function logMovement(itemId, type, qty, note) {
   var item = S.items.find(function(i){ return i.id === itemId; });
-  if(!item) return;
+  if(!item) { S.logModal = null; showToast('⚠️ Item no longer exists.'); render(); return; }
 
-  var prevBal = item.balance; // capture BEFORE the change
+  qty = r2(qty);
+  var prevBal = r2(item.balance);
+  // Optimistic local result (the server result may differ if another device changed it)
+  var optBal = type === 'IN' ? r2(prevBal + qty) : r2(Math.max(0, prevBal - qty));
+  /* FIX #3: history holds what actually changed (0-clamp aware) */
+  var optQty = type === 'IN' ? qty : r2(prevBal - optBal);
+  if(type !== 'IN' && optQty <= 0) { S.logErr = 'Balance is already 0 — nothing to remove.'; render(); return; }
 
-  // IN = add; OUT / WASTE / ADJ = subtract (floor at 0)
-  var newBal = type === 'IN' ? item.balance + qty : Math.max(0, item.balance - qty);
-
-  S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:newBal}) : i; });
-  var updatedItem = S.items.find(function(i){ return i.id === itemId; });
-  var newEntry = {
-    id: Date.now(), ts: new Date().toISOString(),
+  var entry = {
+    id: newEntryId(), ts: new Date().toISOString(),
     itemId: itemId, itemName: item.name,
-    type: type, qty: qty, note: note||''
+    type: type, qty: optQty, note: note||''
   };
-  S.history = [newEntry].concat(S.history).slice(0, 5000);
+  _setLocalBalance(itemId, optBal);
+  S.history = [entry].concat(S.history).slice(0, 5000);
   S.logModal = null; S.logQty = ''; S.logNote = ''; S.logErr = '';
-  pushHistoryEntry(newEntry);   // atomic per-entry write — won't be overwritten
-  saveItem(updatedItem);        // atomic per-item write — won't clobber other items being edited on another device
-
-  // ── FEATURE 1: AUTOMATED STOCK ALERT ──────────────────────────────
-  // Fires only when stock first crosses below threshold or first hits zero.
-  // Does NOT fire repeatedly for every OUT while already low.
-  if (type !== 'IN' && alertsRef) {
-    var wasAboveThreshold = prevBal >= item.threshold;
-    var wasAboveZero      = prevBal > 0;
-    var isNowOut          = newBal === 0;
-    var isNowLow          = newBal > 0 && newBal < item.threshold;
-
-    if (isNowOut && wasAboveZero) {
-      sendStockAlert({
-        type: 'auto_out', status: 'OUT',
-        itemId: itemId, itemName: item.name,
-        balance: newBal, threshold: item.threshold, unit: item.unit,
-        message: '🚨 OUT OF STOCK: ' + item.name +
-                 ' has reached 0 ' + item.unit + '. Please roast more urgently.'
-      });
-      _saveAlertedItem(itemId, 'OUT');
-    } else if (isNowLow && wasAboveThreshold) {
-      sendStockAlert({
-        type: 'auto_low', status: 'LOW',
-        itemId: itemId, itemName: item.name,
-        balance: newBal, threshold: item.threshold, unit: item.unit,
-        message: '⚠️ LOW STOCK: ' + item.name + ' dropped to ' +
-                 newBal + ' ' + item.unit +
-                 ' (minimum: ' + item.threshold + ' ' + item.unit + ').'
-      });
-      _saveAlertedItem(itemId, 'LOW');
-    } else if (type === 'IN' && newBal >= item.threshold) {
-      // Stock restored above threshold — clear dedup so next dip re-alerts
-      delete _alertedItems[String(itemId)];
-      try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
-    }
-  }
-  // ── END AUTOMATED STOCK ALERT ─────────────────────────────────────
-
+  pushHistoryEntry(entry);                      // shows instantly on every device
   var icons = {IN:'📥',OUT:'📤',WASTE:'🗑',ADJ:'✏️'};
-  showToast((icons[type]||'•')+' '+qty+' '+item.unit+' logged as '+type+' for '+item.name);
+  showToast((icons[type]||'•')+' '+optQty+' '+item.unit+' logged as '+type+' for '+item.name);
+
+  txnBalance(itemId, function(cur){
+    return type === 'IN' ? cur + qty : Math.max(0, cur - qty);
+  }, function(err, before, after){
+    if (err) {
+      // Item deleted on another device (or write refused) — undo the history entry
+      S.history = S.history.filter(function(e){ return e.id !== entry.id; });
+      removeHistoryEntry(entry.id);
+      delete _pendingItemBal[itemId];
+      showToast('⚠️ Not saved — '+item.name+' no longer exists or the connection failed.');
+      render(); return;
+    }
+    var actual = type === 'IN' ? r2(after - before) : r2(before - after);
+    _setLocalBalance(itemId, after);
+    if (actual !== optQty) {
+      if (actual === 0) {
+        S.history = S.history.filter(function(e){ return e.id !== entry.id; });
+        removeHistoryEntry(entry.id);
+        showToast('⚠️ '+item.name+' was already at 0 (changed on another device) — nothing removed.');
+      } else {
+        S.history = S.history.map(function(e){ return e.id === entry.id ? Object.assign({}, e, {qty: actual}) : e; });
+        fbRef.child('history').child(String(entry.id)).child('qty').set(actual);
+        showToast('ℹ️ Stock changed on another device — recorded '+actual+' '+item.unit+' ('+type+').');
+      }
+    }
+    _alertOnChange(item, before, after);
+    if (!isBusy()) render();
+  });
   render();
 }
 function addItem(item) {
-  var newItem = Object.assign({}, item, {id: Date.now()});
+  var bal = Math.max(0, r2(item.balance));
+  var newItem = Object.assign({}, item, {id: Date.now(), balance: bal, threshold: Math.max(0, Number(item.threshold)||0)});
   S.items = S.items.concat([newItem]);
   S.newItem = null; S.showAddItem = false;
-  /* Use saveItem (surgical per-child write) not saveAll.
-     saveAll writes S.items as a keyed object which is correct,
-     but also touches every other item unnecessarily.
-     saveItem writes only items/<id> — cleaner and avoids
-     any risk of mixed-key collisions on rapid concurrent adds. */
-  saveItem(newItem);
+  saveItem(newItem);  // surgical per-child write
+  /* AUDIT: record the opening stock in history (as an adjustment, so it
+     doesn't count as "In Today"). Without it, reports for dates BEFORE
+     the item existed showed its opening stock as if it had always been there. */
+  if (bal !== 0) {
+    var e = { id: newEntryId(), ts: new Date().toISOString(), itemId: newItem.id, itemName: newItem.name,
+              type: 'ADJ', qty: r2(-bal), note: '🆕 Opening stock' };
+    S.history = [e].concat(S.history).slice(0, 5000);
+    pushHistoryEntry(e);
+  }
   showToast('✅ '+item.name+' added.'); render();
+}
+function saveItemDetails() {
+  var ei = S.editItem; if(!ei) return;
+  var it = S.items.find(function(i){ return i.id === ei.id; });
+  if(!it) { S.editItem = null; showToast('⚠️ Item no longer exists.'); render(); return; }
+  var name = String(ei.name||'').trim(), cat = String(ei.category||'').trim(), unit = String(ei.unit||'').trim() || 'kg';
+  var thr = parseFloat(ei.threshold);
+  if(!name) { S.editItemErr = 'Name is required.'; render(); return; }
+  if(!cat)  { S.editItemErr = 'Category is required.'; render(); return; }
+  if(isNaN(thr) || thr < 0) { S.editItemErr = 'Min level must be 0 or more.'; render(); return; }
+  var upd = { name: name, category: cat, origin: String(ei.origin||'').trim(), unit: unit, threshold: r2(thr) };
+  function commit() {
+    S.items = S.items.map(function(i){ return i.id === it.id ? Object.assign({}, i, upd) : i; });
+    // Only these fields are written — the balance is never touched here
+    fbRef.child('items').child(itemKey(it.id)).update(upd);
+    S.editItem = null; S.editItemErr = '';
+    showToast('✅ '+name+' updated.');
+    render();
+    setTimeout(scanAndSendAlerts, 300);   // new min level may change LOW status
+  }
+  if(unit !== (it.unit||'kg') && S.history.some(function(e){ return Number(e.itemId) === Number(it.id); })) {
+    showConfirm('Change unit?', 'Changing the unit from "'+(it.unit||'kg')+'" to "'+unit+'" does NOT convert existing quantities or history. Only do this to correct a wrong label.', commit);
+    return;
+  }
+  commit();
 }
 function deleteItem(id) {
   var item = S.items.find(function(i){ return i.id === id; });
   if(!item) return;
-  showConfirm('Delete Item', 'Remove "'+item.name+'" from inventory? This cannot be undone.', function(){
+  showConfirm('Delete Item', 'Remove "'+item.name+'" from inventory? This cannot be undone.\n\nIts past movements stay in history but are no longer counted in "All Products" reports.', function(){
     S.items = S.items.filter(function(i){ return i.id !== id; });
-    /* PERSISTENT pending-delete tracker — survives page refresh.
-       Without this, refreshing before Firebase confirms the write would
-       cause the item to "resurrect" on next load: the un-finished write
-       leaves the old record in Firebase, and a fresh page can't tell it
-       was supposed to be deleted. With localStorage persistence, the
-       next bootApp will see this ID, filter it out, AND re-issue the
-       delete to Firebase. */
-    markItemDeleted(id);
-
+    markItemDeleted(id);   // persistent pending-delete tracker
     if(fbRef) {
-      /* Single atomic write — saveAll() REPLACES the items branch with
-         the new keyed object (without the deleted item), so an explicit
-         .remove() call is redundant AND error-prone (the old code tried
-         to remove items/<id>, but if the item was originally stored under
-         an array-index key like "0", that path didn't exist and .remove()
-         did nothing). Replacing the whole items branch handles every
-         key-encoding case in one operation. */
-      saveAll(function(err) {
-        if (!err) {
-          // Firebase confirmed the write — safe to clear the pending mark
-          unmarkItemDeleted(id);
-        }
-        // If err: keep the pending mark. The next boot (or next saveAll
-        // call) will re-issue the delete. The item won't reappear in the
-        // UI because applyRemoteData filters by _deletedItemIds.
-      });
+      /* FIX #8: remove ONLY this item's node(s) */
+      removeItemRemote(id, function(err) { if (!err) unmarkItemDeleted(id); });
+      fbRef.child('alertDedup').child(String(id)).remove();
     }
+    delete _alertedItems[String(id)]; _persistAlertedItems();
     showToast('🗑 '+item.name+' removed.'); render();
   });
 }
@@ -2532,61 +3084,89 @@ function changePwd(np) {
   savePassword(np); showToast('🔑 Password updated.'); render();
 }
 
+/* FIX #13: reports are rebuilt from history, so deleting history changes
+   the opening/closing figures of past reports. Every delete now says so. */
+var HIST_DELETE_WARNING = '\n\n⚠ Reports are calculated from history, so past reports that include these dates will show different opening/closing figures afterwards.';
+
 function clearAllHistory() {
-  showConfirm('Clear All History', '⚠️ Delete ALL movement history? Stock balances will NOT change — only the history log is cleared. This cannot be undone.', function(){
+  showConfirm('Clear All History', '⚠️ Delete ALL movement history? Stock balances will NOT change — only the history log is cleared. This cannot be undone.'+HIST_DELETE_WARNING, function(){
     S.history = [];
-    fbRef.child('history').remove();
+    _histKeys = {};
+    S.comments = {};
+    // AUDIT: comments belong to history entries — clear them too (were left orphaned)
+    fbRef.update({ history: null, comments: null });
     showToast('🗑 All history cleared.'); render();
   });
 }
 
 function deleteHistoryDay(day) {
-  var label = day === new Date().toDateString() ? 'today' : day === new Date(Date.now()-86400000).toDateString() ? 'yesterday' : day;
-  showConfirm('Delete Day\'s History', 'Delete all entries for '+label+'? Stock balances will NOT be changed.', function(){
-    var toRemove = S.history.filter(function(e){ return new Date(e.ts).toDateString() === day; });
-    S.history = S.history.filter(function(e){ return new Date(e.ts).toDateString() !== day; });
-    toRemove.forEach(function(e){ removeHistoryEntry(e.id); });
-    saveAll(); showToast('🗑 Deleted all entries for '+label+'.'); render();
+  var label = day === todayKey() ? 'today' : day === yesterdayKey() ? 'yesterday' : dayKeyLabel(day, {weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  showConfirm('Delete Day\'s History', 'Delete all entries for '+label+'? Stock balances will NOT be changed.'+HIST_DELETE_WARNING, function(){
+    var toRemove = S.history.filter(function(e){ return dayKey(e.ts) === day; });
+    S.history = S.history.filter(function(e){ return dayKey(e.ts) !== day; });
+    toRemove.forEach(function(e){ removeHistoryEntry(e.id); removeEntryComments(e.id); });
+    showToast('🗑 Deleted all entries for '+label+'.'); render();
   });
 }
 
 function deleteHistoryEntry(entryId) {
-  showConfirm('Delete Entry', 'Delete this entry from history? Stock balance will NOT change. Use ↩ Reverse if you also want to fix the balance.', function(){
+  showConfirm('Delete Entry', 'Delete this entry from history? Stock balance will NOT change. Use ↩ Reverse if you also want to fix the balance.'+HIST_DELETE_WARNING, function(){
     S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
     removeHistoryEntry(entryId);
-    saveAll(); showToast('🗑 Entry deleted.'); render();
+    removeEntryComments(entryId);
+    showToast('🗑 Entry deleted.'); render();
   });
 }
 
+/* FIX #2: the original entry is KEPT and marked as reversed, and a
+   counter-entry is added (before: original deleted AND counter-entry
+   added → history double-counted). AUDIT: runs as a balance transaction. */
+var _reversing = {};
 function reverseEntry(entryId) {
   var entry = S.history.find(function(e){ return String(e.id) === String(entryId); });
   if(!entry) return;
+  if(entry.reversedBy) { showToast('↩ This entry was already reversed.'); return; }
+  if(entry.reversalOf) { showToast('⚠️ This is a reversal — delete it or log a new movement instead.'); return; }
   var item = S.items.find(function(i){ return Number(i.id) === Number(entry.itemId); });
   if(!item) { showToast('⚠️ Item no longer exists.'); return; }
-  showConfirm('Reverse Entry', 'Reverse '+entry.type+' of '+entry.qty+' '+item.unit+' for "'+item.name+'"? This will undo the balance change.', function(){
-    var newBal = entry.type === 'IN'
-      ? Math.max(0, item.balance - entry.qty)
-      : item.balance + entry.qty;
-    S.items = S.items.map(function(i){ return i.id === item.id ? Object.assign({},i,{balance:newBal}) : i; });
-    S.history = S.history.filter(function(e){ return String(e.id) !== String(entryId); });
-    var revEntry = {
-      id: Date.now(), ts: new Date().toISOString(),
-      itemId: item.id, itemName: item.name,
-      type: entry.type === 'IN' ? 'OUT' : 'IN',
-      qty: entry.qty,
-      note: '↩ REVERSAL of '+entry.type+' entry'+(entry.note?' (was: '+entry.note+')':'')
-    };
-    S.history = [revEntry].concat(S.history).slice(0,5000);
-    removeHistoryEntry(entryId);   // surgical remove of the original
-    pushHistoryEntry(revEntry);    // surgical add of the reversal
-    saveAll();
-    showToast('↩ Entry reversed for '+item.name);
-    render();
+  var shown = r2(Math.abs(Number(entry.qty)||0));
+  showConfirm('Reverse Entry', 'Reverse '+entry.type+' of '+shown+' '+item.unit+' for "'+item.name+'"? This will undo the balance change. The original entry stays in history, marked as reversed.', function(){
+    var key = String(entry.id);
+    if (_reversing[key]) return;
+    _reversing[key] = true;
+    var undo = -stockDelta(entry);                 // change needed to undo the entry
+    txnBalance(item.id, function(cur){ return Math.max(0, cur + undo); }, function(err, before, after){
+      delete _reversing[key];
+      if (err) { showToast('⚠️ Reverse failed — item missing or connection problem.'); render(); return; }
+      var actual = r2(after - before);             // what really changed (0-clamp aware)
+      if (actual === 0 && undo !== 0) { showToast('⚠️ Balance is 0 — nothing to reverse.'); render(); return; }
+      var revType, revQty;
+      if(entry.type === 'ADJ') { revType = 'ADJ'; revQty = r2(-actual); }   // ADJ qty = amount removed
+      else if(actual >= 0)     { revType = 'IN';  revQty = actual; }
+      else                     { revType = 'OUT'; revQty = r2(-actual); }
+      var revEntry = {
+        id: newEntryId(), ts: new Date().toISOString(),
+        itemId: item.id, itemName: item.name,
+        type: revType, qty: revQty,
+        reversalOf: entry.id,
+        note: '↩ REVERSAL of '+entry.type+' entry'+(entry.note?' (was: '+entry.note+')':'')
+      };
+      _setLocalBalance(item.id, after);
+      S.history = S.history.map(function(e){ return String(e.id) === key ? Object.assign({}, e, {reversedBy: revEntry.id}) : e; });
+      S.history = [revEntry].concat(S.history).slice(0,5000);
+      var mark = {};
+      (_histKeys[key] || [key]).forEach(function(k){ mark['history/'+k+'/reversedBy'] = revEntry.id; });
+      fbRef.update(mark);
+      pushHistoryEntry(revEntry);
+      _alertOnChange(item, before, after);
+      showToast('↩ Entry reversed for '+item.name+(Math.abs(actual) !== shown ? ' ('+Math.abs(actual)+' '+item.unit+' — limited by current stock)' : ''));
+      render();
+    });
   });
 }
 
 /* ══════════════════════════════════════════════════════
-   COMMENT ACTIONS
+   COMMENT ACTIONS  (FIX #8: per-entry transactions, not saveAll)
 ══════════════════════════════════════════════════════ */
 function addComment(entryId, text, userName) {
   if(!text || !text.trim()) return;
@@ -2594,20 +3174,23 @@ function addComment(entryId, text, userName) {
   if(!S.comments[key]) S.comments[key] = [];
   var user = (userName && userName.trim()) ? userName.trim() : 'Team';
   if(user !== 'Team') S.commentUser = user; // remember last used name
-  S.comments[key].push({ text: text.trim(), ts: new Date().toISOString(), user: user });
-  saveAll();
+  var c = { text: text.trim(), ts: new Date().toISOString(), user: user };
+  S.comments[key].push(c);
+  pushCommentRemote(key, c);
   showToast('💬 Comment added.');
   render();
 }
 function deleteComment(entryId, idx) {
   var key = String(entryId);
-  if(!S.comments[key]) return;
+  if(!S.comments[key] || !S.comments[key][idx]) return;
+  var c = S.comments[key][idx];
   S.comments[key].splice(idx, 1);
-  saveAll(); render();
+  removeCommentRemote(key, c);
+  render();
 }
 
 /* ══════════════════════════════════════════════════════
-   CATEGORY ACTIONS
+   CATEGORY ACTIONS  (FIX #8: writes only the categories node)
 ══════════════════════════════════════════════════════ */
 function addCategory(name) {
   if(!name || !name.trim()) return;
@@ -2615,12 +3198,12 @@ function addCategory(name) {
   if(S.categories.indexOf(n) >= 0) { showToast('Category already exists.'); return; }
   S.categories = S.categories.concat([n]);
   S.newCatName = '';
-  saveAll(); showToast('✅ Category "'+n+'" added.'); render();
+  saveCategories(); showToast('✅ Category "'+n+'" added.'); render();
 }
 function deleteCategory(name) {
   showConfirm('Delete Category', 'Delete category "'+name+'"? Items using it will keep their current category value.', function(){
     S.categories = S.categories.filter(function(c){ return c !== name; });
-    saveAll(); showToast('🗑 Category deleted.'); render();
+    saveCategories(); showToast('🗑 Category deleted.'); render();
   });
 }
 
@@ -2628,50 +3211,34 @@ function deleteCategory(name) {
    INLINE BALANCE EDIT
 ══════════════════════════════════════════════════════ */
 function saveEditedBalance(itemId, val) {
-  var n = parseFloat(val);
-  if(isNaN(n) || n < 0) { showToast('⚠️ Invalid value.'); return; }
+  var n = r2(parseFloat(val));
+  if(isNaN(parseFloat(val)) || n < 0) { showToast('⚠️ Invalid value.'); return; }
   var item = S.items.find(function(i){ return i.id === itemId; });
   if(!item) return;
-  var old = item.balance;
-  S.items = S.items.map(function(i){ return i.id === itemId ? Object.assign({},i,{balance:n}) : i; });
-  var newEntry = {
-    id: Date.now(), ts: new Date().toISOString(),
-    itemId: itemId, itemName: item.name,
-    type: 'ADJ', qty: Math.abs(n - old),
-    note: '✏️ Manual balance edit: '+old+' → '+n
-  };
-  S.history = [newEntry].concat(S.history).slice(0,5000);
-  pushHistoryEntry(newEntry);   // atomic per-entry write
-
-  // Trigger stock alerts on balance edit (same logic as logMovement)
-  if(alertsRef) {
-    var status = getStatus(n, item.threshold);
-    if(status !== 'OK' && _shouldAlert(itemId, status)) {
-      if(status === 'OUT') {
-        sendStockAlert({
-          type: 'auto_out', status: 'OUT',
-          itemId: itemId, itemName: item.name,
-          balance: n, threshold: item.threshold, unit: item.unit,
-          message: '🚨 OUT OF STOCK: ' + item.name + ' set to 0 ' + item.unit + ' via manual edit.'
-        });
-      } else {
-        sendStockAlert({
-          type: 'auto_low', status: 'LOW',
-          itemId: itemId, itemName: item.name,
-          balance: n, threshold: item.threshold, unit: item.unit,
-          message: '⚠️ LOW STOCK: ' + item.name + ' manually set to ' + n + ' ' + item.unit + ' (minimum: ' + item.threshold + ').'
-        });
-      }
-      _saveAlertedItem(itemId, status);
-    } else if(status === 'OK') {
-      delete _alertedItems[String(itemId)];
-      try { localStorage.setItem('wc-alerted-items', JSON.stringify(_alertedItems)); } catch(e) {}
-    }
-  }
-
   S.editBalId = null; S.editBalVal = '';
-  var updatedItem = S.items.find(function(i){ return i.id === itemId; });
-  saveItem(updatedItem); showToast('✏️ Balance updated to '+n+' '+item.unit); render();
+  if(n === r2(item.balance)) { render(); return; }
+  _setLocalBalance(itemId, n);
+  render();
+  /* AUDIT: transaction, so the ADJ records the difference from the
+     SERVER value at the moment of the edit (another device may have
+     changed it a second earlier). */
+  txnBalance(itemId, function(){ return n; }, function(err, before, after){
+    if (err) { delete _pendingItemBal[itemId]; showToast('⚠️ Balance not saved — item missing or connection problem.'); render(); return; }
+    _setLocalBalance(itemId, after);
+    if (before === after) { render(); return; }
+    /* FIX #1: ADJ qty = amount REMOVED, with sign (10 → 50 = −40). */
+    var e = {
+      id: newEntryId(), ts: new Date().toISOString(),
+      itemId: itemId, itemName: item.name,
+      type: 'ADJ', qty: r2(before - after),
+      note: '✏️ Manual balance edit: '+before+' → '+after
+    };
+    S.history = [e].concat(S.history).slice(0,5000);
+    pushHistoryEntry(e);
+    _alertOnChange(item, before, after);
+    showToast('✏️ Balance updated to '+after+' '+item.unit);
+    render();
+  });
 }
 
 /* ══════════════════════════════════════════════════════
@@ -2687,12 +3254,8 @@ function exportCSV() {
     var dl = d.toLocaleDateString([],{day:'2-digit',month:'short',year:'numeric'});
     lines.push([dl, r.open, r.in, r.out, r.waste, r.adj, r.close].join(','));
   });
-  var csv = 'Windmill Cafe & Roastery \u2014 Stock Report\n'+title+'\n\n'+lines.join('\n');
-  var blob = new Blob([csv], {type:'text/csv'});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url; a.download = 'windmill-report-'+S.rptFrom+'.csv'; a.click();
-  URL.revokeObjectURL(url);
+  var csv = '\uFEFF'+'Windmill Cafe & Roastery \u2014 Stock Report\n'+csvText(title)+'\n\n'+lines.join('\n');
+  downloadBlob(new Blob([csv], {type:'text/csv;charset=utf-8'}), 'windmill-report-'+(S.rptFrom||'')+'_to_'+(S.rptTo||'')+'.csv');
   showToast('📥 CSV exported!');
 }
 
@@ -2700,6 +3263,27 @@ function exportCSV() {
    EXPORT MOVEMENTS CSV — Day-by-day, Week, or Month
    Records every movement entry with full detail
 ══════════════════════════════════════════════════════ */
+/* AUDIT: text that starts with = + - @ is run as a FORMULA by Excel
+   (CSV injection, e.g. a note "=HYPERLINK(...)"). csvText() prefixes it
+   with an apostrophe. Numbers go through csvEscape() unchanged. */
+function csvText(v) {
+  v = String(v == null ? '' : v);
+  if (/^[=+\-@\t\r]/.test(v)) v = "'" + v;
+  return csvEscape(v);
+}
+function downloadBlob(blob, name) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click();
+  // AUDIT: revoking immediately can cancel the download in some browsers
+  setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+}
+function copyText(text, okMsg) {
+  if (!navigator.clipboard || !navigator.clipboard.writeText) { showToast('⚠️ Copy not supported in this browser.'); return; }
+  navigator.clipboard.writeText(text).then(function(){ showToast(okMsg); })
+    .catch(function(){ showToast('⚠️ Could not copy — browser blocked clipboard access.'); });
+}
 function csvEscape(v) {
   v = String(v == null ? '' : v);
   if (v.indexOf('"')>=0 || v.indexOf(',')>=0 || v.indexOf('\n')>=0) {
@@ -2707,8 +3291,13 @@ function csvEscape(v) {
   }
   return v;
 }
-function exportMovementsCSV(period) {
+function exportMovementsCSV(period, ignoreFilters) {
+  /* AUDIT: the Settings → Data buttons exported only what matched the
+     dashboard's current search / type filter. They now export everything. */
+  var saved = { s: S.movSearch, t: S.movTypeFilter };
+  if (ignoreFilters) { S.movSearch = ''; S.movTypeFilter = 'All'; }
   var movs = filteredMovements();
+  if (ignoreFilters) { S.movSearch = saved.s; S.movTypeFilter = saved.t; }
   if (!movs.length) {
     showToast('No movements to export for this period.');
     return;
@@ -2728,45 +3317,43 @@ function exportMovementsCSV(period) {
   // Per-day grouped (oldest day first inside CSV for readability)
   groups.slice().reverse().forEach(function(g){
     // Day separator + summary
-    var dStr = g.date.toLocaleDateString([], {weekday:'long', year:'numeric', month:'short', day:'numeric'});
+    var dStr = dayKeyLabel(g.key, {weekday:'long', year:'numeric', month:'short', day:'numeric'});
     lines.push('');
-    lines.push(csvEscape('── ' + dStr + ' — IN: ' + (Math.round(g.totalIn*10)/10) + ' kg / OUT: ' + (Math.round(g.totalOut*10)/10) + ' kg ──'));
+    lines.push(csvEscape('── ' + dStr + ' — IN: ' + (Math.round(g.totalIn*10)/10) + ' kg / OUT+Waste: ' + (Math.round(g.totalOut*10)/10) + ' kg / Net: ' + g.net + ' kg ──'));
     // Sort items oldest-first within the day
     var sorted = g.items.slice().sort(function(a,b){ return new Date(a.ts) - new Date(b.ts); });
     sorted.forEach(function(e){
       var d = new Date(e.ts);
       lines.push([
-        d.toLocaleDateString([], {year:'numeric', month:'2-digit', day:'2-digit'}),
-        d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'}),
-        d.toLocaleDateString([], {weekday:'short'}),
-        e.itemName || '',
+        dayKey(d),
+        d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit', timeZone: bizTz()}),
+        d.toLocaleDateString([], {weekday:'short', timeZone: bizTz()}),
+        {t: e.itemName || ''},
         e.type || '',
-        (e.type === 'IN' ? '+' : '-') + (Number(e.qty)||0),
-        'kg',
-        e.note || '',
-        e.user || ''
-      ].map(csvEscape).join(','));
+        (stockDelta(e) >= 0 ? '+' : '-') + r2(Math.abs(stockDelta(e))),
+        unitFor(e.itemId),
+        {t: e.note || ''},
+        {t: e.user || ''}
+      ].map(function(v){ return (v && typeof v === 'object') ? csvText(v.t) : csvEscape(v); }).join(','));
     });
   });
 
   // Period totals
-  var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
-  var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
+  // FIX #6: same definitions as the dashboard (OUT = OUT + WASTE, Net includes ADJ)
+  var totalIn = r2(movs.filter(function(e){return e.type==='IN' && !isVoided(e);}).reduce(function(s,e){return s+(Number(e.qty)||0);},0));
+  var totalOut= r2(movs.filter(function(e){return (e.type==='OUT'||e.type==='WASTE') && !isVoided(e);}).reduce(function(s,e){return s+(Number(e.qty)||0);},0));
+  var netChg  = r2(movs.reduce(function(s,e){ return s + stockDelta(e); }, 0));
   lines.push('');
   lines.push(csvEscape('── PERIOD TOTALS ──'));
-  lines.push(['','','','Total IN','', '+'+(Math.round(totalIn*10)/10),'kg','',''].map(csvEscape).join(','));
-  lines.push(['','','','Total OUT','','-'+(Math.round(totalOut*10)/10),'kg','',''].map(csvEscape).join(','));
-  lines.push(['','','','Net Change','',(totalIn-totalOut>=0?'+':'')+(Math.round((totalIn-totalOut)*10)/10),'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Total IN','', '+'+totalIn,'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Total OUT + Waste','','-'+totalOut,'kg','',''].map(csvEscape).join(','));
+  lines.push(['','','','Net Change (incl. adjustments)','',(netChg>=0?'+':'')+netChg,'kg','',''].map(csvEscape).join(','));
 
   // Build & download — BOM so Excel opens UTF-8 correctly
   var csv = '\uFEFF' + lines.join('\n');
-  var blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
   var dateTag = new Date().toISOString().slice(0,10);
   var pTag = (period||S.movPeriod);
-  a.href = url; a.download = 'windmill-movements-'+pTag+'-'+dateTag+'.csv'; a.click();
-  URL.revokeObjectURL(url);
+  downloadBlob(new Blob([csv], {type:'text/csv;charset=utf-8'}), 'windmill-movements-'+pTag+'-'+dateTag+'.csv');
   showToast('📥 ' + movs.length + ' movements exported (' + lbl + ').');
 }
 
@@ -2908,12 +3495,18 @@ function render() {
         +'<div class="form-field" style="flex:2 1 180px"><label>Note (optional)</label>'
         +'<input type="text" class="inp" id="logNoteInput" value="'+esc(S.logNote)+'" placeholder="Batch #, supplier, reason…" autocomplete="off"></div>'
         +'</div>'
+        +(S.logType==='ADJ'?'<div style="font-size:10px;color:var(--cream3);margin-top:8px;line-height:1.5">✏️ ADJUST <strong>removes</strong> this quantity (e.g. stock-count shortfall). To set an exact balance, use the ✏️ button next to the balance in the Team Panel.</div>':'')
         +(S.logErr?'<div class="err-txt" style="margin-top:8px">'+esc(S.logErr)+'</div>':'')
         +'</div>'
         +'<div class="modal-foot">'
         +'<button class="btn-save" id="logSaveBtn" style="flex:1">'+(S.logType==='IN'?'📥 Record Stock In':S.logType==='OUT'?'📤 Record Stock Out':S.logType==='WASTE'?'🗑 Record Waste':'✏️ Record Adjustment')+'</button>'
         +'<button class="btn-cancel" id="logCancelBtn">Cancel</button>'
         +'</div></div></div>';
+    } else {
+      /* AUDIT: the item was deleted on another device while this modal was
+         open. Leaving S.logModal set made the app think a modal was still
+         open, so it stopped showing live updates. */
+      S.logModal = null; S.logQty = ''; S.logNote = ''; S.logErr = '';
     }
   }
 
@@ -2987,11 +3580,12 @@ function render() {
   /* METRICS */
   var todIn   = todayMoves(null,'IN');
   var todOut  = todayMoves(null,'OUT');
-  var totBal  = S.items.reduce(function(s,i){ return s+i.balance; },0);
+  var totBal  = totalKgOnHand();   // FIX #15: kg items only — mixed units can't be added
+  var nonKg   = nonKgItemCount();
   h += '<div class="metrics">'
-    +'<div class="metric"><div class="metric-val" style="color:var(--gold2)">'+totBal.toLocaleString()+'</div><div class="metric-lbl">Total Balance</div><div class="metric-sub">kg on hand</div></div>'
+    +'<div class="metric"><div class="metric-val" style="color:var(--gold2)">'+totBal.toLocaleString()+'</div><div class="metric-lbl">Total Balance</div><div class="metric-sub">kg on hand'+(nonKg?' (+'+nonKg+' non-kg item'+(nonKg===1?'':'s')+')':'')+'</div></div>'
     +'<div class="metric"><div class="metric-val" style="color:var(--green)">+'+todIn.toLocaleString()+'</div><div class="metric-lbl">In Today</div><div class="metric-sub">kg received</div></div>'
-    +'<div class="metric"><div class="metric-val" style="color:var(--red)">-'+todOut.toLocaleString()+'</div><div class="metric-lbl">Out Today</div><div class="metric-sub">kg used/sold</div></div>'
+    +'<div class="metric"><div class="metric-val" style="color:var(--red)">-'+todOut.toLocaleString()+'</div><div class="metric-lbl">Out Today</div><div class="metric-sub">kg used/sold + waste</div></div>'
     +'<div class="metric"><div class="metric-val" style="font-size:15px;color:'+(sync?'var(--orange)':'var(--cream)')+';margin-top:2px">'+fmtTime(S.lastSync)+'</div><div class="metric-lbl">Last Updated</div><div class="metric-sub">'+fmtDate(S.lastSync)+'</div></div>'
     +'</div>';
 
@@ -3015,7 +3609,7 @@ function render() {
     var lowCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='LOW'; }).length;
     var outCnt = S.items.filter(function(i){ return getStatus(i.balance,i.threshold)==='OUT'; }).length;
     var origCnt= Array.from(new Set(S.items.map(function(i){ return i.origin; }))).length;
-    var totBalDash = S.items.reduce(function(s,i){ return s+Number(i.balance); }, 0);
+    var totBalDash = totalKgOnHand();
     var healthCls = outCnt>0 ? 'kpi-crit' : lowCnt>0 ? 'kpi-warn' : 'kpi-good';
     var healthLbl = outCnt>0 ? outCnt+' out · '+lowCnt+' low' : lowCnt>0 ? lowCnt+' low · all in stock' : 'All healthy';
     h += '<div class="kpi-row">'
@@ -3042,7 +3636,7 @@ function render() {
       +'<div class="kpi-tile">'
       +'<div class="kpi-row-top"><span class="kpi-icon">📤</span><span class="kpi-lbl">Out Today</span></div>'
       +'<div class="kpi-val" style="color:'+(todOut?'var(--red)':'var(--cream3)')+'">'+(todOut?'−':'')+todOut.toLocaleString()+'<span style="font-size:13px;color:var(--cream3);margin-left:4px;font-weight:400">kg</span></div>'
-      +'<div class="kpi-sub">stock used</div>'
+      +'<div class="kpi-sub">used + waste</div>'
       +'</div>'
       +'</div>';
 
@@ -3207,17 +3801,18 @@ function render() {
     if(S.history.length) {
       var movs = filteredMovements();
       var groups = groupByDay(movs);
-      var totalIn = movs.filter(function(e){return e.type==='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
-      var totalOut= movs.filter(function(e){return e.type!=='IN';}).reduce(function(s,e){return s+(Number(e.qty)||0);},0);
-      var net = totalIn - totalOut;
+      // FIX #6: OUT = OUT + WASTE (same as "Out Today"); Net includes ADJ with its sign
+      var totalIn = r2(movs.filter(function(e){return e.type==='IN' && !isVoided(e);}).reduce(function(s,e){return s+(Number(e.qty)||0);},0));
+      var totalOut= r2(movs.filter(function(e){return (e.type==='OUT'||e.type==='WASTE') && !isVoided(e);}).reduce(function(s,e){return s+(Number(e.qty)||0);},0));
+      var net = r2(movs.reduce(function(s,e){ return s + stockDelta(e); }, 0));
 
       var cntT={today:0,week:0,month:0,all:S.history.length};
-      var cToday = (function(){var t=new Date();t.setHours(0,0,0,0);return t.getTime();})();
+      var cTodayK = todayKey();
       var cWeek  = Date.now()-7*24*60*60*1000;
       var cMonth = Date.now()-30*24*60*60*1000;
       S.history.forEach(function(e){
         var ts = new Date(e.ts).getTime();
-        if (ts>=cToday) cntT.today++;
+        if (dayKey(ts)===cTodayK) cntT.today++;
         if (ts>=cWeek)  cntT.week++;
         if (ts>=cMonth) cntT.month++;
       });
@@ -3243,13 +3838,14 @@ function render() {
         +'<select class="mov-filter" id="movTypeFilterSel">'
         +'<option value="All"'+(S.movTypeFilter==='All'?' selected':'')+'>All types</option>'
         +'<option value="IN"'+(S.movTypeFilter==='IN'?' selected':'')+'>📥 IN only</option>'
-        +'<option value="OUT"'+(S.movTypeFilter==='OUT'?' selected':'')+'>📤 OUT only</option>'
+        +'<option value="OUT"'+(S.movTypeFilter==='OUT'?' selected':'')+'>📤 OUT + Waste</option>'
+        +'<option value="ADJ"'+(S.movTypeFilter==='ADJ'?' selected':'')+'>✏️ Adjustments</option>'
         +'</select>'
         +'</div>';
       h += '<div class="mov-stats">'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Total IN</div>'
           +'<div class="mov-stat-val" style="color:var(--green)">+'+(Math.round(totalIn*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
-        +'<div class="mov-stat"><div class="mov-stat-lbl">Total OUT</div>'
+        +'<div class="mov-stat"><div class="mov-stat-lbl">Total OUT + Waste</div>'
           +'<div class="mov-stat-val" style="color:var(--red)">−'+(Math.round(totalOut*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
         +'<div class="mov-stat"><div class="mov-stat-lbl">Net Change</div>'
           +'<div class="mov-stat-val" style="color:'+(net>=0?'var(--green)':'var(--red)')+'">'+(net>=0?'+':'')+(Math.round(net*10)/10)+'<span class="mov-stat-unit">kg</span></div></div>'
@@ -3260,25 +3856,23 @@ function render() {
       } else {
         groups.forEach(function(g){
           var dStr;
-          var today = (function(){var t=new Date();t.setHours(0,0,0,0);return t.getTime();})();
-          var yest  = today - 24*60*60*1000;
-          if (g.date.getTime() >= today) dStr = 'TODAY · ' + g.date.toLocaleDateString([], {month:'short',day:'numeric'});
-          else if (g.date.getTime() >= yest) dStr = 'YESTERDAY · ' + g.date.toLocaleDateString([], {month:'short',day:'numeric'});
-          else dStr = g.date.toLocaleDateString([], {weekday:'long',month:'short',day:'numeric'});
+          if (g.key === todayKey()) dStr = 'TODAY · ' + dayKeyLabel(g.key, {month:'short',day:'numeric'});
+          else if (g.key === yesterdayKey()) dStr = 'YESTERDAY · ' + dayKeyLabel(g.key, {month:'short',day:'numeric'});
+          else dStr = dayKeyLabel(g.key, {weekday:'long',month:'short',day:'numeric'});
 
           h += '<div class="mov-day-hdr"><span>'+dStr+'</span>'
             +'<span class="mov-day-hdr-right">'
             +(g.totalIn>0?'<span style="color:var(--green)">+'+(Math.round(g.totalIn*10)/10)+'</span>':'')
             +(g.totalIn>0 && g.totalOut>0?' · ':'')
             +(g.totalOut>0?'<span style="color:var(--red)">−'+(Math.round(g.totalOut*10)/10)+'</span>':'')
-            +' kg</span></div>';
+            +((g.totalIn>0||g.totalOut>0)?' kg':'')
+            +((g.totalIn===0&&g.totalOut===0)?'<span style="color:var(--blue)">net '+(g.net>=0?'+':'')+g.net+' kg</span>':'')
+            +'</span></div>';
 
           g.items.slice().sort(function(a,b){return new Date(b.ts)-new Date(a.ts);}).forEach(function(e){
-            var isIn = e.type==='IN';
-            h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
+            h += '<div class="hist-row"><span class="hist-time">'+fmtHM(e.ts)+'</span>'
               +'<span class="hist-name">'+esc(e.itemName)+'</span>'
-              +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-              +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+              +movIconQty(e)
               +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
           });
         });
@@ -3297,22 +3891,20 @@ function render() {
       var st = getStatus(item.balance, item.threshold), m = SM[st];
       var iIn = todayMoves(item.id,'IN'), iOut = todayMoves(item.id,'OUT');
       h += '<div class="bal-row"><span class="bal-name">'+esc(item.name)+'<br><span style="font-size:9px;color:var(--cream3);font-family:\'Barlow Condensed\'">'+esc(item.origin)+'</span></span>'
-        +'<span class="bal-in">'+(iIn>0?'+'+iIn+' kg':'—')+'</span>'
-        +'<span class="bal-out">'+(iOut>0?'-'+iOut+' kg':'—')+'</span>'
+        +'<span class="bal-in">'+(iIn>0?'+'+iIn+' '+esc(item.unit):'—')+'</span>'
+        +'<span class="bal-out">'+(iOut>0?'-'+iOut+' '+esc(item.unit):'—')+'</span>'
         +'<span class="bal-num" style="color:'+m.color+'">'+item.balance.toLocaleString()+' '+esc(item.unit)+'</span>'
         +'<span><span class="badge '+m.cls+'">'+m.lbl+'</span></span></div>';
     });
     h += '</div>';
-    var todHist = S.history.filter(function(e){ return new Date(e.ts).toDateString()===tod2; });
+    var todHist = S.history.filter(function(e){ return dayKey(e.ts)===tod2; });
     h += '<div class="section-label">Today\'s Movements</div>';
     if(todHist.length) {
       h += '<div class="hist-panel"><div class="hist-head"><span>All movements today</span><span style="font-size:9px">'+todHist.length+' records</span></div><div class="hist-scroll">';
       todHist.forEach(function(e){
-        var isIn = e.type==='IN';
-        h += '<div class="hist-row"><span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
+        h += '<div class="hist-row"><span class="hist-time">'+fmtHM(e.ts)+'</span>'
           +'<span class="hist-name">'+esc(e.itemName)+'</span>'
-          +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-          +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
+          +movIconQty(e)
           +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'')+'</div>';
       });
       h += '</div></div>';
@@ -3357,17 +3949,21 @@ function render() {
       +'</div>'
       +'</div>';
 
-    if(S.rptRows) {
+    if(S.rptLoading) {
+      h += '<div class="rpt-empty">⏳ Loading full history for this date range…</div>';
+    } else if(S.rptRows) {
       var rows = S.rptRows;
+      if(S.rptNote) h += '<div class="notice view" style="margin:10px 20px 0">ℹ️ '+esc(S.rptNote)+'</div>';
       var selectedItem = rItem ? S.items.find(function(i){ return String(i.id)===String(rItem); }) : null;
-      var productLabel = selectedItem ? selectedItem.name : 'All Products';
-      var unit = selectedItem ? selectedItem.unit : 'kg';
+      var productLabel = selectedItem ? selectedItem.name : (rCat !== 'All' ? 'All '+rCat : 'All Products');
+      var unit = S.rptUnit || (selectedItem ? selectedItem.unit : 'kg');
 
       // Summary cards
       var totIn=0, totOut=0, totWaste=0, totAdj=0;
       rows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
-      var openBal  = rows.length ? rows[0].open  : 0;
-      var closeBal = rows.length ? rows[rows.length-1].close : 0;
+      totIn=r2(totIn); totOut=r2(totOut); totWaste=r2(totWaste); totAdj=r2(totAdj);
+      var openBal  = rows.length ? rows[0].open  : (rows.openBal  || 0);
+      var closeBal = rows.length ? rows[rows.length-1].close : (rows.closeBal || 0);
 
       h += '<div class="rpt-title-bar">'
         +'<div><div class="rpt-product-name">'+esc(productLabel)+'</div>'
@@ -3380,12 +3976,12 @@ function render() {
         +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--green)">+'+totIn.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total IN</div></div>'
         +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--red)">-'+totOut.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total OUT</div></div>'
         +'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--orange)">-'+totWaste.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Total Waste</div></div>'
-        +(totAdj?'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--blue)">'+totAdj.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Adjustments</div></div>':'')
+        +(totAdj?'<div class="rpt-card"><div class="rpt-card-val" style="color:var(--blue)">'+(totAdj>0?'+':'')+r2(totAdj).toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Adjustments (net)</div></div>':'')
         +'<div class="rpt-card rpt-card-close"><div class="rpt-card-val" style="color:var(--gold3)">'+closeBal.toLocaleString()+'<span class="rpt-unit"> '+unit+'</span></div><div class="rpt-card-lbl">Closing Stock</div></div>'
         +'</div>';
 
-      if(!rows.length) {
-        h += '<div class="hist-panel" style="margin:0 20px 20px"><div style="padding:32px;text-align:center;color:var(--cream3);font-size:12px">No movements found for this period.</div></div>';
+      if(!rows.length || rows.hasMoves === false) {
+        h += '<div class="hist-panel" style="margin:0 20px 20px"><div style="padding:32px;text-align:center;color:var(--cream3);font-size:12px">No movements in this period — stock stayed at '+closeBal.toLocaleString()+' '+esc(unit)+'.</div></div>';
       } else {
         // Sparkline chart
         h += renderSparkline(rows);
@@ -3405,7 +4001,7 @@ function render() {
             +'<span class="rpt-num" style="color:var(--green)">'+(r.in?'+'+r.in.toLocaleString():'—')+'</span>'
             +'<span class="rpt-num" style="color:var(--red)">'+(r.out?'-'+r.out.toLocaleString():'—')+'</span>'
             +'<span class="rpt-num" style="color:var(--orange)">'+(r.waste?'-'+r.waste.toLocaleString():'—')+'</span>'
-            +'<span class="rpt-num" style="color:var(--blue)">'+(r.adj?r.adj.toLocaleString():'—')+'</span>'
+            +'<span class="rpt-num" style="color:var(--blue)">'+(r.adj?(r.adj>0?'+':'')+r.adj.toLocaleString():'—')+'</span>'
             +'<span class="rpt-num rpt-close" style="color:'+(r.close<=0?'var(--red)':r.close<(selectedItem?selectedItem.threshold:50)?'var(--orange)':'var(--gold3)')+'">'+r.close.toLocaleString()+'</span>'
             +'</div>';
         });
@@ -3419,14 +4015,16 @@ function render() {
   /* ── PROVISIONING ── */
   if(S.view === 'provision') {
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
-    var outItems  = needItems.filter(function(i){ return i.balance === 0; });
-    var lowItems  = needItems.filter(function(i){ return i.balance > 0; });
+    var outItems  = needItems.filter(function(i){ return getStatus(i.balance,i.threshold) === 'OUT'; });
+    var lowItems  = needItems.filter(function(i){ return getStatus(i.balance,i.threshold) === 'LOW'; });
+    // FIX #5: one formula (suggestedOrder) for the total, the table and the copied list
+    var totalToOrder = r2(needItems.reduce(function(s,i){ return isKgUnit(i.unit) ? s + suggestedOrder(i) : s; }, 0));
     h += '<div class="section-label">Provisioning & Purchase Planner</div>';
     h += '<div class="prov-wrap">';
     h += '<div class="prov-summary">'
       +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--red)">'+outItems.length+'</div><div class="prov-stat-lbl">Out of Stock</div></div>'
       +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--orange)">'+lowItems.length+'</div><div class="prov-stat-lbl">Low Stock</div></div>'
-      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--gold2)">'+needItems.reduce(function(s,i){return s+(Math.max(i.threshold*2,i.threshold-i.balance+50));},0).toLocaleString()+'</div><div class="prov-stat-lbl">Total kg to Order</div></div>'
+      +'<div class="prov-stat"><div class="prov-stat-num" style="color:var(--gold2)">'+totalToOrder.toLocaleString()+'</div><div class="prov-stat-lbl">Total kg to Order</div></div>'
       +(S.teamUnlocked?'<div style="display:flex;align-items:center;padding:0 4px"><button class="btn-copy-prov" id="copyProvBtn">📋 Copy Order List</button></div>':'')
       +'</div>';
     if(!needItems.length) {
@@ -3436,11 +4034,9 @@ function render() {
         +'<div class="prov-hdr"><span>Coffee Bean</span><span>Current</span><span>Min Level</span><span>Deficit</span><span>Avg/Day</span><span>Suggested Order</span><span>Status</span></div>';
       needItems.forEach(function(item){
         var st = getStatus(item.balance,item.threshold), m = SM[st];
-        var deficit = Math.max(0, item.threshold - item.balance);
+        var deficit = r2(Math.max(0, item.threshold - item.balance));
         var daily = avgDailyUsage(item.id);
-        // Smart suggestion: cover deficit + 14 days of usage (or at least threshold*2)
-        var coverDays = daily > 0 ? Math.ceil((deficit + daily * 14)) : Math.max(item.threshold * 2, deficit + item.threshold);
-        var suggested = Math.max(item.threshold * 2, coverDays);
+        var suggested = suggestedOrder(item);
         h += '<div class="prov-row">'
           +'<span class="prov-name">'+esc(item.name)+'<div class="prov-note">'+esc(item.origin)+'</div></span>'
           +'<span style="color:'+m.color+';font-weight:600">'+item.balance+' '+esc(item.unit)+'</span>'
@@ -3474,7 +4070,7 @@ function render() {
       var snapKeys = snapshotKeysSorted();
       h += '<div class="snap-section">'
         +'<div class="snap-head">'
-        +'<div class="snap-title">📸 End-of-Day Snapshots'
+        +'<div class="snap-title">📸 Daily Snapshots <span style="font-size:9px;color:var(--cream3);font-weight:400;text-transform:none;letter-spacing:0">(auto = start of day)</span>'
         +(snapKeys.length?' <span style="color:var(--cream3);font-weight:400;font-size:10px;letter-spacing:0.04em;text-transform:none;margin-left:4px">('+snapKeys.length+' captured)</span>':'')
         +'</div>'
         +'<div class="snap-actions">'
@@ -3483,7 +4079,7 @@ function render() {
         +'</div></div>'
         +'<div class="snap-body">';
       if(!snapKeys.length) {
-        h += '<div class="snap-empty">No snapshots yet. Click <strong style="color:var(--green)">Take Snapshot Now</strong> to capture today\'s closing balances. Snapshots auto-capture once per day on the first load of a new day.</div>';
+        h += '<div class="snap-empty">No snapshots yet. Click <strong style="color:var(--green)">Take Snapshot Now</strong> to capture the current balances. A snapshot is also taken automatically on the first load of each day — that one records the <strong>start-of-day</strong> balances (the previous day\'s closing stock).</div>';
       } else {
         h += '<div class="snap-list">';
         snapKeys.slice(0, 14).forEach(function(k, idx){
@@ -3497,7 +4093,7 @@ function render() {
           else { deltaTxt = '±0 kg'; deltaCls = 'snap-delta-flat'; }
           var when = new Date(s.ts);
           h += '<div class="snap-row">'
-            +'<div class="snap-row-date">'+k+'<small>'+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+esc(s.by||'auto')+'</small></div>'
+            +'<div class="snap-row-date">'+esc(k)+'<small>'+when.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+' · '+esc(s.by||'auto')+'</small></div>'
             +'<div class="snap-row-num">'+s.totals.totalKg+' <span style="font-size:9px;color:var(--cream3)">kg total</span></div>'
             +'<div class="snap-row-delta '+deltaCls+'" title="vs previous snapshot">'+deltaTxt+'</div>'
             +'<div class="snap-row-low snap-hide-sm">'+s.totals.lowCount+' low</div>'
@@ -3545,9 +4141,9 @@ function render() {
       +'<input class="inp" id="tpSearch" placeholder="Search items…" value="'+esc(S.tpFilterSearch)+'" style="font-size:11px;padding:5px 8px;width:150px"></div>'
       +'<div class="fg" style="justify-content:flex-end"><label>&nbsp;</label>'
       +'<div style="display:flex;gap:4px"><span style="font-size:9px;color:var(--cream3);align-self:center">SORT:</span>'
-      +'<button class="sort-btn'+(S.dashSort==='name'?' on':'')+'" data-tpsort="name">Name</button>'
-      +'<button class="sort-btn'+(S.dashSort==='stock'?' on':'')+'" data-tpsort="stock">Stock ↓</button>'
-      +'<button class="sort-btn'+(S.dashSort==='status'?' on':'')+'" data-tpsort="status">Status</button>'
+      +'<button class="sort-btn'+(S.tpSort==='name'?' on':'')+'" data-tpsort="name">Name</button>'
+      +'<button class="sort-btn'+(S.tpSort==='stock'?' on':'')+'" data-tpsort="stock">Stock ↓</button>'
+      +'<button class="sort-btn'+(S.tpSort==='status'?' on':'')+'" data-tpsort="status">Status</button>'
       +'</div></div>'
       +'</div>';
 
@@ -3569,6 +4165,31 @@ function render() {
         +'<button class="btn-cancel" id="niCancel">Cancel</button></div></div>';
     }
 
+    /* FIX: item details (name, category, origin, unit, min level) can now be edited */
+    if(S.editItem) {
+      var ei = S.editItem;
+      var eiOrig = S.items.find(function(i){ return i.id === ei.id; });
+      if(!eiOrig) { S.editItem = null; }
+      else {
+        h += '<div class="form-box" style="border-color:rgba(80,144,216,0.45)"><div style="font-size:11px;color:var(--blue);font-weight:700;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:12px">✎ Edit '+esc(eiOrig.name)+'</div>'
+          +'<div class="form-row">'
+          +'<div class="form-field" style="flex:2 1 180px"><label>Bean Name</label><input class="inp ei-f" data-f="name" value="'+esc(ei.name)+'"></div>'
+          +'<div class="form-field"><label>Category</label>'
+          +'<select class="inp ei-f" data-f="category">'
+          +(S.categories.indexOf(ei.category) < 0 ? '<option value="'+esc(ei.category)+'" selected>'+esc(ei.category)+'</option>' : '')
+          +S.categories.map(function(c){ return '<option value="'+esc(c)+'"'+(ei.category===c?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
+          +'</select></div>'
+          +'<div class="form-field"><label>Origin</label><input class="inp ei-f" data-f="origin" value="'+esc(ei.origin)+'"></div>'
+          +'<div class="form-field" style="flex:0 1 70px"><label>Unit</label><input class="inp ei-f" data-f="unit" value="'+esc(ei.unit)+'"></div>'
+          +'<div class="form-field" style="flex:0 1 100px"><label>Min Level</label><input type="number" class="inp ei-f" data-f="threshold" value="'+esc(ei.threshold)+'" min="0" step="0.01" inputmode="decimal"></div>'
+          +'</div>'
+          +(S.editItemErr?'<div class="err-txt" style="margin-top:6px">'+esc(S.editItemErr)+'</div>':'')
+          +'<div style="font-size:10px;color:var(--cream3);margin-top:6px">Balance is changed with the ✏️ button or IN / OUT — not here.</div>'
+          +'<div class="form-btns"><button class="btn-save" id="eiSave">Save Changes</button>'
+          +'<button class="btn-cancel" id="eiCancel">Cancel</button></div></div>';
+      }
+    }
+
     // Apply team panel filters
     var tpItems = S.items.filter(function(item){
       var stLbl  = SM[getStatus(item.balance,item.threshold)].lbl;
@@ -3578,8 +4199,8 @@ function render() {
       return catOk && statOk && srchOk;
     });
     var sortOrd2 = {OK:2, LOW:1, OUT:0};
-    if(S.dashSort==='stock') tpItems.sort(function(a,b){ return b.balance - a.balance; });
-    else if(S.dashSort==='status') tpItems.sort(function(a,b){ return sortOrd2[getStatus(a.balance,a.threshold)] - sortOrd2[getStatus(b.balance,b.threshold)]; });
+    if(S.tpSort==='stock') tpItems.sort(function(a,b){ return b.balance - a.balance; });
+    else if(S.tpSort==='status') tpItems.sort(function(a,b){ return sortOrd2[getStatus(a.balance,a.threshold)] - sortOrd2[getStatus(b.balance,b.threshold)]; });
     else tpItems.sort(function(a,b){ return a.name.localeCompare(b.name); });
 
     var cols = '2.5fr 1.2fr 1fr 1fr 1fr 1.8fr';
@@ -3599,15 +4220,16 @@ function render() {
             +'<button class="btn-save-bal" data-savebal="'+item.id+'">✓</button>'
             +'<button class="btn-cancel" style="padding:3px 6px;font-size:10px" data-cancelbal="'+item.id+'">✕</button></span>'
           : '<span style="text-align:right;font-family:\'JetBrains Mono\',monospace;color:'+m.color+';font-weight:600;display:flex;align-items:center;justify-content:flex-end;gap:5px">'
-            +item.balance+' '+esc(item.unit)
+            +r2(item.balance)+' '+esc(item.unit)
             +'<button class="btn-edit-bal" data-editbal="'+item.id+'" data-editbalval="'+item.balance+'" title="Edit balance">✏️</button></span>'
         )
-        +'<span style="text-align:right;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+(tIn2?'+'+tIn2:'—')+'</span>'
-        +'<span style="text-align:right;color:var(--red);font-family:\'JetBrains Mono\',monospace">'+(tOut2?'-'+tOut2:'—')+'</span>'
-        +'<span style="text-align:center"><span class="badge '+m.cls+'">'+m.lbl+'</span></span>'
-        +'<span style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">'
+        +'<span class="ti-in" style="text-align:right;color:var(--green);font-family:\'JetBrains Mono\',monospace">'+(tIn2?'+'+tIn2:'—')+'</span>'
+        +'<span class="ti-out" style="text-align:right;color:var(--red);font-family:\'JetBrains Mono\',monospace">'+(tOut2?'-'+tOut2:'—')+'</span>'
+        +'<span class="ti-st" style="text-align:center"><span class="badge '+m.cls+'">'+m.lbl+'</span></span>'
+        +'<span class="ti-act" style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap">'
         +'<button class="btn-log-in" data-logid="'+item.id+'" data-logtype="IN">📥 IN</button>'
         +'<button class="btn-log-out" data-logid="'+item.id+'" data-logtype="OUT">📤 OUT</button>'
+        +'<button class="btn-edit-item" data-edititem="'+item.id+'" title="Edit details">✎</button>'
         +'<button class="btn-del" data-delid="'+item.id+'" title="Delete">🗑</button>'
         +'</span></div>';
     });
@@ -3679,7 +4301,7 @@ function render() {
       var grouped = {};
       var groupOrder = [];
       filteredHist.forEach(function(e){
-        var day = new Date(e.ts).toDateString();
+        var day = dayKey(e.ts);
         if(!grouped[day]){ grouped[day]=[]; groupOrder.push(day); }
         grouped[day].push(e);
       });
@@ -3700,9 +4322,9 @@ function render() {
       for(var gi = 0; gi < groupOrder.length; gi++) {
         var day = groupOrder[gi];
         if(shownSoFar >= totalShown) break;
-        var isToday = day === new Date().toDateString();
-        var isYest  = day === new Date(Date.now()-86400000).toDateString();
-        var dayLabel = isToday ? 'Today' : isYest ? 'Yesterday' : new Date(day).toLocaleDateString([],{weekday:'short',month:'short',day:'numeric'});
+        var isToday = day === todayKey();
+        var isYest  = day === yesterdayKey();
+        var dayLabel = isToday ? 'Today' : isYest ? 'Yesterday' : dayKeyLabel(day, {weekday:'short',month:'short',day:'numeric'});
         h += '<div style="padding:5px 16px;background:var(--bg2);font-size:9px;color:var(--gold2);font-weight:700;letter-spacing:0.14em;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">'
           +'<span>'+dayLabel+'</span>'
           +'<button class="btn-del-day" data-day="'+esc(day)+'" style="font-size:9px;background:rgba(224,82,82,0.08);border:1px solid var(--red-bd);color:var(--red);padding:2px 8px;border-radius:4px;font-weight:700">🗑 Delete '+dayLabel+'</button>'
@@ -3710,19 +4332,19 @@ function render() {
         grouped[day].forEach(function(e){
           if(shownSoFar >= totalShown) return;
           shownSoFar++;
-          var isIn = e.type==='IN';
           var entryComments = S.comments[String(e.id)] || [];
           var showComments = S.openCommentId === e.id;
           h += '<div style="border-bottom:1px solid var(--border)">'
             +'<div class="hist-row" style="border-bottom:none">'
-            +'<span class="hist-time">'+new Date(e.ts).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</span>'
+            +'<span class="hist-time">'+fmtHM(e.ts)+'</span>'
             +'<span class="hist-name">'+esc(e.itemName)+'</span>'
-            +'<span class="'+(isIn?'hist-type-in':'hist-type-out')+'">'+(isIn?'📥':'📤')+'</span>'
-            +'<span class="hist-qty" style="color:'+(isIn?'var(--green)':'var(--red)')+'">'+(isIn?'+':'-')+e.qty+' kg</span>'
-            +(e.note?'<span class="hist-note">"'+esc(e.note)+'"</span>':'<span></span>')
+            +movIconQty(e)
+            +(e.note||e.reversedBy?'<span class="hist-note">'+(e.reversedBy?'<span class="rev-tag">↩ reversed</span> ':'')+(e.note?'"'+esc(e.note)+'"':'')+'</span>':'<span class="hist-note"></span>')
             +'<div style="display:flex;gap:4px;flex-shrink:0">'
             +'<button class="comment-badge" data-opencomment="'+esc(e.id)+'" title="Comments">💬'+(entryComments.length?' '+entryComments.length:'')+'</button>'
-            +'<button class="btn-reverse" data-revid="'+esc(e.id)+'" title="Reverse balance">↩</button>'
+            +((e.reversedBy||e.reversalOf)
+              ? '<button class="btn-reverse" disabled title="'+(e.reversedBy?'Already reversed':'This is a reversal entry')+'">↩</button>'
+              : '<button class="btn-reverse" data-revid="'+esc(e.id)+'" title="Reverse balance">↩</button>')
             +'<button class="btn-del-entry" data-entryid="'+esc(e.id)+'" title="Delete this entry">🗑</button>'
             +'</div>'
             +'</div>'
@@ -3806,6 +4428,21 @@ function render() {
         +'<div class="settings-clock-date" id="settingsClockDate">'+clk.date+'</div>'
         +'</div>';
 
+      // Business time zone (shared)
+      var tzList = ['Asia/Dubai','Asia/Colombo','Asia/Kolkata','Asia/Riyadh','Asia/Qatar','Europe/London','UTC'];
+      var curTz = bizTz(), devTz = deviceTz();
+      if (tzList.indexOf(curTz) < 0) tzList.unshift(curTz);
+      if (tzList.indexOf(devTz) < 0) tzList.push(devTz);
+      h += '<div class="settings-card">'
+        +'<div class="settings-card-title"><span class="settings-card-icon">🌍</span>Business Time Zone</div>'
+        +'<div style="font-size:11px;color:var(--cream2);margin-bottom:8px;line-height:1.6">Decides what counts as "today", day groups, reports and snapshots — the same on every device.'
+        +(S.shared && S.shared.timeZone ? '' : ' <span style="color:var(--orange)">Not set yet — using this device\'s zone ('+esc(devTz)+').</span>')
+        +'</div>'
+        +'<select class="inp" id="bizTzSel" style="font-size:12px;padding:6px 8px;width:100%">'
+        +tzList.map(function(z){ return '<option value="'+esc(z)+'"'+(z===curTz?' selected':'')+'>'+esc(z)+(z===devTz?' (this device)':'')+'</option>'; }).join('')
+        +'</select>'
+        +'</div>';
+
       // Theme
       h += '<div class="settings-card">'
         +'<div class="settings-card-title"><span class="settings-card-icon">🎨</span>UI Theme</div>'
@@ -3882,9 +4519,9 @@ function render() {
         +'<div class="settings-row">'
         +'<div class="settings-row-label">'
         +'<div class="settings-row-name">Snooze duration</div>'
-        +'<div class="settings-row-desc">After alerting, suppress repeats for this long</div>'
+        +'<div class="settings-row-desc">After alerting, suppress repeats for this long — applies to all devices</div>'
         +'</div>'
-        +'<div style="display:flex;align-items:center;gap:6px"><input type="number" class="settings-num-inp" id="prefSnooze" min="5" max="1440" step="5" value="'+(ap.snoozeMinutes||60)+'"><span style="font-size:11px;color:var(--cream3)">min</span></div>'
+        +'<div style="display:flex;align-items:center;gap:6px"><input type="number" class="settings-num-inp" id="prefSnooze" min="5" max="1440" step="5" value="'+snoozeMinutes()+'"><span style="font-size:11px;color:var(--cream3)">min</span></div>'
         +'</div>'
         +'</div>';
 
@@ -4044,9 +4681,10 @@ function render() {
       h += '<div class="alerts-list" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));">';
       pAlerts.forEach(function(a){
         var isCrit = a.sev === 'CRITICAL';
-        var icon = a.item.balance===0 ? '🚨' : isCrit ? '⛔' : '⚠️';
+        var isOut = getStatus(a.item.balance, a.item.threshold) === 'OUT';
+        var icon = isOut ? '🚨' : isCrit ? '⛔' : '⚠️';
         var daysTxt = '';
-        if (a.item.balance === 0) daysTxt = '<div class="alert-card-days" style="color:var(--red)">📍 Out of stock — restock urgently</div>';
+        if (isOut) daysTxt = '<div class="alert-card-days" style="color:var(--red)">📍 Out of stock — restock urgently</div>';
         else if (a.daysLeft != null) {
           var dColor = a.daysLeft <= 3 ? 'var(--red)' : a.daysLeft <= 7 ? 'var(--orange)' : 'var(--cream3)';
           daysTxt = '<div class="alert-card-days" style="color:'+dColor+'">⏱ ~'+a.daysLeft+' day'+(a.daysLeft===1?'':'s')+' of stock left</div>';
@@ -4056,7 +4694,7 @@ function render() {
           +'<div class="alert-card-body">'
           +'<div class="alert-card-name">'+esc(a.item.name)+'</div>'
           +'<div class="alert-card-detail">'
-          +'<span class="alert-card-bal">'+a.item.balance+'</span>'
+          +'<span class="alert-card-bal">'+r2(a.item.balance)+'</span>'
           +' / '+a.item.threshold+' '+esc(a.item.unit)+' min'
           +'</div>'
           +daysTxt
@@ -4108,7 +4746,8 @@ function bindEvents() {
   };
   var lb=g('lockBtn');  if(lb) lb.onclick=doLock;
   var ll=g('lockLink'); if(ll) ll.onclick=doLock;
-  var rb=g('refreshBtn'); if(rb) rb.onclick=function(){ fbRef.once('value',function(snap){ if(snap.val()) applyRemoteData(snap.val(),true); }); };
+  // AUDIT: refresh re-reads the branches (not the whole database root)
+  var rb=g('refreshBtn'); if(rb) rb.onclick=function(){ loadAllBranches(function(d){ applyRemoteData(d,true); showToast('↻ Refreshed.'); }); };
   var prb=g('pendingRefreshBtn'); if(prb) prb.onclick=function(ev){
     ev.stopPropagation();
     // Blur whatever input the user is in so isBusy() goes false, then re-render
@@ -4170,7 +4809,10 @@ function bindEvents() {
     var note=nel?nel.value:S.logNote;
     if(!qty||qty<=0){ S.logErr='Please enter a valid quantity.'; render(); return; }
     var item=S.items.find(function(i){ return i.id===S.logModal; });
-    if(S.logType==='OUT'&&qty>item.balance){ S.logErr='Cannot remove more than current balance ('+item.balance+' '+item.unit+').'; render(); return; }
+    // FIX #15: item may have been deleted on another device while the modal was open
+    if(!item){ S.logModal=null; S.logQty=''; S.logNote=''; S.logErr=''; showToast('⚠️ This item was deleted on another device.'); render(); return; }
+    // FIX #3: WASTE and ADJUST also remove stock — validate them like OUT
+    if(S.logType!=='IN'&&r2(qty)>r2(item.balance)){ S.logErr='Cannot remove more than current balance ('+r2(item.balance)+' '+item.unit+').'; render(); return; }
     logMovement(S.logModal,S.logType,qty,note);
   };
   var lcb=g('logCancelBtn'); if(lcb) lcb.onclick=function(){ S.logModal=null; S.logQty=''; S.logNote=''; S.logErr=''; render(); };
@@ -4202,7 +4844,7 @@ function bindEvents() {
   var ccan=g('cpCancel'); if(ccan) ccan.onclick=function(){ S.showCPwd=false; S.cpOld=S.cpNew=S.cpConf=S.cpErr=''; render(); };
 
   var aib=g('addItemBtn'); if(aib) aib.onclick=function(){
-    S.showAddItem=true; S.newItem={name:'',category:'Single Origin',origin:'',unit:'kg',balance:0,threshold:30}; render();
+    S.editItem=null; S.showAddItem=true; S.newItem={name:'',category:'Single Origin',origin:'',unit:'kg',balance:0,threshold:30}; render();
   };
   document.querySelectorAll('.ni-f').forEach(function(inp){
     var ev = inp.tagName==='SELECT' ? 'change' : 'input';
@@ -4214,6 +4856,25 @@ function bindEvents() {
   });
   var nis=g('niSave'); if(nis) nis.onclick=function(){ if(S.newItem&&S.newItem.name.trim()&&S.newItem.category.trim()) addItem(S.newItem); };
   var nic=g('niCancel'); if(nic) nic.onclick=function(){ S.showAddItem=false; S.newItem=null; render(); };
+
+  /* Edit item details */
+  document.querySelectorAll('[data-edititem]').forEach(function(b){
+    b.onclick=function(){
+      var it=S.items.find(function(i){ return i.id===Number(b.getAttribute('data-edititem')); });
+      if(!it) return;
+      S.showAddItem=false;
+      S.editItem={ id:it.id, name:it.name||'', category:it.category||'', origin:it.origin||'', unit:it.unit||'kg', threshold:it.threshold };
+      S.editItemErr='';
+      render();
+      setTimeout(function(){ var f=document.querySelector('.ei-f[data-f="name"]'); if(f) f.focus(); },60);
+    };
+  });
+  document.querySelectorAll('.ei-f').forEach(function(inp){
+    var ev = inp.tagName==='SELECT' ? 'change' : 'input';
+    inp.addEventListener(ev, function(){ S.editItem[this.getAttribute('data-f')] = this.value; });
+  });
+  var eis=g('eiSave'); if(eis) eis.onclick=function(){ saveItemDetails(); };
+  var eic=g('eiCancel'); if(eic) eic.onclick=function(){ S.editItem=null; S.editItemErr=''; render(); };
 
   /* Reverse entry */
   document.querySelectorAll('[data-revid]').forEach(function(b){
@@ -4242,7 +4903,7 @@ function bindEvents() {
   });
   /* Team panel sort */
   document.querySelectorAll('[data-tpsort]').forEach(function(b){
-    b.onclick=function(){ S.dashSort=this.getAttribute('data-tpsort'); render(); };
+    b.onclick=function(){ S.tpSort=this.getAttribute('data-tpsort'); render(); };
   });
 
   /* Team panel filters */
@@ -4297,12 +4958,11 @@ function bindEvents() {
     S.items.forEach(function(item){
       var st=SM[getStatus(item.balance,item.threshold)].lbl;
       var tI=todayMoves(item.id,'IN'), tO=todayMoves(item.id,'OUT');
-      lines.push([item.name,item.category,item.balance,item.unit,st,tI,tO].join(','));
+      // AUDIT: names/categories with commas broke the columns — now escaped
+      lines.push([csvText(item.name),csvText(item.category),r2(item.balance),csvText(item.unit),st,tI,tO].join(','));
     });
-    var blob=new Blob([lines.join('\n')],{type:'text/csv'});
-    var url=URL.createObjectURL(blob); var a=document.createElement('a');
-    a.href=url; a.download='windmill-stock-'+new Date().toISOString().slice(0,10)+'.csv'; a.click();
-    URL.revokeObjectURL(url); showToast('📥 CSV exported!');
+    downloadBlob(new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'}), 'windmill-stock-'+new Date().toISOString().slice(0,10)+'.csv');
+    showToast('📥 CSV exported!');
   };
 
   /* Comments */
@@ -4347,18 +5007,11 @@ function bindEvents() {
   var rrn=g('rptRunBtn');
   if(rrn) rrn.onclick=function(){
     var dr=defaultDateRange();
-    var from = new Date((S.rptFrom||dr.from)+'T00:00:00');
-    var to   = new Date((S.rptTo  ||dr.to  )+'T23:59:59');
-    // Filter items by chosen category
-    var catItems = S.rptCat==='All' ? null : S.items.filter(function(i){ return i.category===S.rptCat; }).map(function(i){ return i.id; });
-    var itemId = S.rptItem ? S.rptItem : null;
-    if(!itemId && catItems) {
-      // Build combined ledger for category
-      S.rptRows = buildCategoryLedger(catItems, from, to);
-    } else {
-      S.rptRows = buildDailyLedger(itemId||null, from, to);
-    }
-    render();
+    var from = S.rptFrom || dr.from;     // day keys, business time zone
+    var to   = S.rptTo   || dr.to;
+    // AUDIT: selected product may have been deleted since it was chosen
+    if (S.rptItem && !S.items.some(function(i){ return String(i.id) === String(S.rptItem); })) S.rptItem = '';
+    runReport(from, to);
   };
   // Report category chips
   document.querySelectorAll('[data-rptcat]').forEach(function(b){
@@ -4384,8 +5037,8 @@ function bindEvents() {
     });
     var totIn=0,totOut=0,totWaste=0,totAdj=0;
     S.rptRows.forEach(function(r){ totIn+=r.in; totOut+=r.out; totWaste+=r.waste; totAdj+=r.adj; });
-    lines.push('','SUMMARY','Total IN: '+totIn+' | Total OUT: '+totOut+' | Total Waste: '+totWaste+' | Opening: '+S.rptRows[0].open+' | Closing: '+S.rptRows[S.rptRows.length-1].close);
-    navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Report copied to clipboard!'); });
+    lines.push('','SUMMARY','Opening: '+S.rptRows[0].open+' | Total IN: '+r2(totIn)+' | Total OUT: '+r2(totOut)+' | Total Waste: '+r2(totWaste)+' | Adjustments: '+(totAdj>0?'+':'')+r2(totAdj)+' | Closing: '+S.rptRows[S.rptRows.length-1].close);
+    copyText(lines.join('\n'), '📋 Report copied to clipboard!');
   };
   /* ── Settings panel ─────────────────────────────────────────────── */
   var osb=g('openSettingsBtn');
@@ -4433,6 +5086,15 @@ function bindEvents() {
     };
   });
   var sov=g('settings-overlay'); if(sov) sov.onclick=function(e){ if(e.target===sov){ S.showSettings=false; render(); } };
+
+  var btz=g('bizTzSel');
+  if(btz) btz.onchange=function(){
+    if(!S.teamUnlocked){ showToast('🔒 Unlock the Team Panel to change the business time zone.'); render(); return; }
+    saveSharedSetting('timeZone', this.value);
+    S.rptRows = null;
+    showToast('🌍 Business time zone set to '+this.value+' (all devices).');
+    render();
+  };
 
   /* ── Settings Tab switching ── */
   document.querySelectorAll('[data-stab]').forEach(function(b){
@@ -4496,7 +5158,8 @@ function bindEvents() {
     var v = Math.max(5, Math.min(1440, parseInt(this.value,10)||60));
     S.alertPrefs.snoozeMinutes = v;
     saveAlertPrefs();
-    showToast('✓ Snooze set to '+v+' minutes.');
+    saveSharedSetting('snoozeMinutes', v);
+    showToast('✓ Snooze set to '+v+' minutes (all devices).');
   };
   var pts=g('prefTestSound');
   if(pts) pts.onclick=function(){
@@ -4525,9 +5188,13 @@ function bindEvents() {
   var prs=g('prefRescan');
   if(prs) prs.onclick=function(){
     // Clear de-dup tracker so all current LOW/OUT items re-alert
+    // FIX #9: clear the key the app actually uses ('wc-alerted-items'),
+    // plus the shared cross-device claims, then scan again.
     _alertedItems = {};
-    try { localStorage.removeItem('windmill_alerted_items'); } catch(e){}
-    scanAndSendAlerts();
+    try { localStorage.removeItem('wc-alerted-items'); } catch(e){}
+    S.alertDedup = {};
+    if (fbRef) fbRef.child('alertDedup').remove(function(){ scanAndSendAlerts(); });
+    else scanAndSendAlerts();
     if (S.alertPrefs && S.alertPrefs.soundEnabled) {
       var anyAlert = S.items.some(function(i){ return getStatus(i.balance, i.threshold) !== 'OK'; });
       if (anyAlert) playAlertChime();
@@ -4552,7 +5219,7 @@ function bindEvents() {
       // Temporarily switch period for the export, but don't change UI tabs
       var prev = S.movPeriod;
       S.movPeriod = parts[1];
-      exportMovementsCSV(parts[1]);
+      exportMovementsCSV(parts[1], true);
       S.movPeriod = prev;
     };
   });
@@ -4595,13 +5262,12 @@ function bindEvents() {
 
   var cpb=g('copyProvBtn'); if(cpb) cpb.onclick=function(){
     var needItems = S.items.filter(function(i){ return getStatus(i.balance,i.threshold) !== 'OK'; });
-    var lines = ['Windmill Cafe & Roastery — Purchase Order', new Date().toLocaleDateString(), ''];
+    var lines = ['Windmill Cafe & Roastery — Purchase Order', dayKeyLabel(todayKey(), {day:'2-digit',month:'short',year:'numeric'}), ''];
     needItems.forEach(function(item){
-      var deficit = Math.max(0, item.threshold - item.balance);
-      var suggested = Math.max(item.threshold*2, deficit+item.threshold);
-      lines.push(item.name+' ('+item.origin+'): '+suggested+' '+item.unit+' — current stock: '+item.balance+' '+item.unit);
+      var suggested = suggestedOrder(item);  // FIX #5: same formula as the table
+      lines.push(item.name+' ('+item.origin+'): '+suggested+' '+item.unit+' — current stock: '+r2(item.balance)+' '+item.unit);
     });
-    navigator.clipboard.writeText(lines.join('\n')).then(function(){ showToast('📋 Order list copied to clipboard!'); });
+    copyText(lines.join('\n'), '📋 Order list copied to clipboard!');
   };
 
   /* ══ SNAPSHOTS ══════════════════════════════════════════════ */
@@ -4709,8 +5375,7 @@ function bootApp() {
   _loadAlertedItems(); // restore de-dup tracker from localStorage
   loadAlertPrefs();    // restore alert sound/desktop/snooze preferences
 
-  fbRef.once('value', function(snap) {
-    var data = snap.val() || {};
+  loadAllBranches(function(data) {
     /* Only seed DEFAULTS on a TRULY empty database.
        PREVIOUS BUG: the old check was `if(!data.items)` followed by
        `fbRef.set({items:DEFAULTS, password:'windmill2024'})`. Two problems:
@@ -4743,11 +5408,16 @@ function bootApp() {
       fbRef.update({ items: seedItems, password: 'windmill2024' });
       S.items = DEFAULTS.slice(); S.history = []; S.password = 'windmill2024';
     } else {
-      S.items       = data.items       ? objToArr(data.items)   : [];
-      S.history     = data.history     ? normalizeHistory(objToArr(data.history)) : [];
+      indexItemKeys(data.items);
+      S.items       = data.items       ? itemsFromFb(data.items)   : [];
+      S.history     = data.history     ? historyFromFb(data.history) : [];
       S.password    = data.password    || 'windmill2024';
       S.snapshots   = data.snapshots   || {};
       S.teamUpdates = data.teamUpdates || {};
+      S.alertDedup  = data.alertDedup  || {};
+      S.shared      = (data.settings && typeof data.settings === 'object') ? data.settings : {};
+      S.comments    = normalizeComments(data.comments);
+      if (data.categories) S.categories = Array.isArray(data.categories) ? data.categories.filter(Boolean) : Object.values(data.categories);
       // Sort history newest-first (Firebase child writes don't preserve array order)
       S.history.sort(function(a,b){
         var ta = a && a.ts ? new Date(a.ts).getTime() : 0;
@@ -4798,11 +5468,18 @@ function bootApp() {
     setTimeout(autoSnapshotCheck, 2000);
 
     // Auto-show alerts popup ONCE per session if any item is below threshold
+    /* FIX: auto-open the alerts popup at most ONCE PER DAY on each device
+       (it used to open on every page load — annoying on a wall screen).
+       The header "Alerts" badge still opens it any time. */
     setTimeout(function(){
       if (S._alertsPopupAutoShown) return;
+      var shownDay = null;
+      try { shownDay = localStorage.getItem('wc-alerts-popup-day'); } catch(e) {}
+      if (shownDay === todayKey()) return;
       var anyAlert = S.items.some(function(i){ return getStatus(i.balance, i.threshold) !== 'OK'; });
-      if (anyAlert) {
+      if (anyAlert && !isBusy()) {
         S._alertsPopupAutoShown = true;
+        try { localStorage.setItem('wc-alerts-popup-day', todayKey()); } catch(e) {}
         S.showAlertsPopup = true;
         render();
       }
@@ -4814,10 +5491,43 @@ function bootApp() {
        because applyRemoteData re-applies the same data harmlessly,
        and the new write-tag system means we only skip echoes of
        OUR OWN writes — never updates from other devices. */
-    fbRef.on('value', function(snap) {
-      var d = snap.val();
-      if(!d) return;
-      applyRemoteData(d, true);
+    /* FIX #17: one listener PER BRANCH instead of one on the root.
+       A change to items no longer makes every device re-process the whole
+       history/snapshots tree, and history/snapshots are capped with
+       limitToLast() so the initial download stays small as data grows. */
+    var remote = Object.assign({}, data);
+    FB_BRANCHES.forEach(function(name){
+      branchQuery(name).on('value', function(snap) {
+        var v = snap.val();
+        if (v === null || v === undefined) delete remote[name]; else remote[name] = v;
+        applyRemoteData(remote, true, name);
+      });
+    });
+  });
+}
+
+/* Branches of windmill-stock/ that the app reads */
+var FB_BRANCHES = ['items','history','password','comments','categories','snapshots','teamUpdates','alertDedup','settings'];
+var HISTORY_LIMIT  = 5000;  // same cap the app already applies locally
+var SNAPSHOT_LIMIT = 120;   // ~4 months of daily snapshots
+function branchQuery(name) {
+  var r = fbRef.child(name);
+  if (name === 'history')   return r.limitToLast(HISTORY_LIMIT);
+  if (name === 'snapshots') return r.limitToLast(SNAPSHOT_LIMIT);
+  return r;
+}
+/* Initial load: read each branch once, in parallel, then boot */
+function loadAllBranches(cb) {
+  var data = {}, left = FB_BRANCHES.length, done = false;
+  function finish(){ if (!done) { done = true; cb(data); } }
+  FB_BRANCHES.forEach(function(name){
+    branchQuery(name).once('value', function(snap){
+      var v = snap.val();
+      if (v !== null && v !== undefined) data[name] = v;
+      if (--left === 0) finish();
+    }, function(err){
+      console.error('[windmill] load failed for', name, err);
+      if (--left === 0) finish();
     });
   });
 }
@@ -4829,23 +5539,18 @@ function bootApp() {
 
 console.log("Windmill Stability Patch Loaded");
 
-/* Prevent duplicate clicks */
-const clickMap = new WeakMap();
-
+/* FIX #12: the old "Prevent duplicate clicks" handler blocked EVERY
+   second click on ANY button within 500ms (chips, sort, tabs, +/-).
+   Now only buttons that SAVE data are protected against a double tap. */
+var _saveBtnIds = { logSaveBtn:1, confirmOk:1, cpSave:1, niSave:1, alertSendBtn:1, tuPostBtn:1, addCatBtn:1 };
+var _lastSaveClick = new WeakMap();
 document.addEventListener('click', function(e){
-  const el = e.target.closest('button');
+  var el = e.target.closest && e.target.closest('button');
   if(!el) return;
-
-  const last = clickMap.get(el) || 0;
-  const now = Date.now();
-
-  if(now - last < 500){
-    e.preventDefault();
-    e.stopPropagation();
-    return false;
-  }
-
-  clickMap.set(el, now);
+  if(!_saveBtnIds[el.id] && !el.hasAttribute('data-savebal') && !el.hasAttribute('data-sendcomment')) return;
+  var now = Date.now(), last = _lastSaveClick.get(el) || 0;
+  if(now - last < 600){ e.preventDefault(); e.stopPropagation(); return; }
+  _lastSaveClick.set(el, now);
 }, true);
 
 /* Safer JSON parsing */
@@ -4878,25 +5583,11 @@ window.safeCalc = function(a,b,op="+"){
   }
 }
 
-/* Prevent realtime listener duplication */
-const originalAddEventListener = EventTarget.prototype.addEventListener;
-
-EventTarget.prototype.addEventListener = function(type, listener, options){
-  if(!this.__listenerMap){
-    this.__listenerMap = new Set();
-  }
-
-  const key = type + "_" + listener.toString();
-
-  if(this.__listenerMap.has(key)){
-    console.warn("Duplicate listener blocked:", type);
-    return;
-  }
-
-  this.__listenerMap.add(key);
-
-  return originalAddEventListener.call(this, type, listener, options);
-};
+/* FIX #12: the EventTarget.prototype.addEventListener override was
+   removed. It de-duplicated listeners by their SOURCE TEXT, so two
+   different elements/libraries (including the Firebase SDK) using
+   identical handler code had the second listener silently dropped,
+   and removeEventListener never cleared its map. */
 
 /* Auto localStorage protection */
 const originalSetItem = localStorage.setItem;
