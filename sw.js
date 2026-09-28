@@ -1,7 +1,7 @@
 /* Windmill Stock — service worker
    Makes the dashboard installable and lets it open without signal.
    Stock data itself always comes live from Firebase (never cached here). */
-const CACHE = 'beans-stock-v2';
+const CACHE = 'beans-stock-v3';
 const SHELL = ['./', './index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png', './icons/favicon-64.png'];
 

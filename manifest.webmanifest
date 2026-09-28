@@ -2,7 +2,7 @@
   "name": "Beans Stock — Windmill Cafe & Roastery",
   "short_name": "Beans Stock",
   "description": "Live stock dashboard for Windmill Cafe & Roastery",
-  "id": "./",
+  "id": "windmill-beans-stock",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
